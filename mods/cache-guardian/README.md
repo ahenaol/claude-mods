@@ -1,6 +1,6 @@
 # cache-guardian
 
-[![Versión](https://img.shields.io/badge/versi%C3%B3n-3.4.0-6a4fd8.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versi%C3%B3n-3.4.1-6a4fd8.svg)](CHANGELOG.md)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.289-d97757.svg)](https://claude.com/claude-code)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../LICENSE)
 
