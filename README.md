@@ -1,4 +1,4 @@
-# claude-mods
+# Mods de ahenaol para Claude Code
 
 Mods públicos para [Claude Code](https://claude.com/claude-code). Un mod es un plugin que cambia la interfaz o el comportamiento de Claude Code con hooks: franjas encima del prompt, paneles, comandos y reacciones a eventos de la sesión.
 
