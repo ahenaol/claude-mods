@@ -1,0 +1,15 @@
+{
+  "name": "ahenaol-mods",
+  "owner": { "name": "Alejandro Henao Loaiza", "url": "https://github.com/ahenaol" },
+  "metadata": {
+    "description": "Mods públicos de Claude Code de Alejandro Henao Loaiza"
+  },
+  "plugins": [
+    {
+      "name": "cache-guardian",
+      "source": "./mods/cache-guardian",
+      "description": "Reloj de caché, cuota (5 h y semanal) frente al ritmo ideal, handoff preventivo y guardián del regreso",
+      "version": "3.3.0"
+    }
+  ]
+}

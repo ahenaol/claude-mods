@@ -1,0 +1,86 @@
+{
+  "name": "cache-guardian",
+  "version": "3.3.0",
+  "description": "Reloj de caché, cuota (5 h y semanal) frente al ritmo ideal, handoff preventivo y guardián del regreso",
+  "author": {
+    "name": "Alejandro Henao Loaiza",
+    "url": "https://github.com/ahenaol"
+  },
+  "homepage": "https://github.com/ahenaol/claude-mods/tree/main/mods/cache-guardian",
+  "repository": "https://github.com/ahenaol/claude-mods",
+  "license": "MIT",
+  "keywords": [
+    "mod",
+    "cache",
+    "quota",
+    "handoff"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "ttl": {
+      "type": "string",
+      "title": "TTL de la caché",
+      "description": "auto lo aprende de tus pausas (asume 1h mientras tanto); 1h o 5m lo fijan",
+      "options": [
+        "auto",
+        "1h",
+        "5m"
+      ],
+      "default": "auto"
+    },
+    "minTokens": {
+      "type": "number",
+      "title": "Contexto mínimo (tokens)",
+      "description": "Por debajo no hay handoff automático, guardián ni botones",
+      "default": 40000
+    },
+    "softTokens": {
+      "type": "number",
+      "title": "Contexto pesado (tokens)",
+      "description": "Desde aquí la franja marca contexto pesado y sale el primer aviso",
+      "default": 100000
+    },
+    "hardTokens": {
+      "type": "number",
+      "title": "Contexto muy pesado (tokens)",
+      "description": "Segundo aviso",
+      "default": 150000
+    },
+    "autoHandoff": {
+      "type": "boolean",
+      "title": "Handoff automático",
+      "description": "Escribir el handoff solo, antes de que venza la caché",
+      "default": true
+    },
+    "showQuota": {
+      "type": "boolean",
+      "title": "Mostrar cuota",
+      "description": "Línea con el uso de la ventana de 5 h y la semanal frente al ritmo ideal",
+      "default": true
+    },
+    "quotaWarn": {
+      "type": "number",
+      "title": "Alerta de cuota (% proyectado)",
+      "description": "Desde este % proyectado al renovar la barra pasa a amarillo; sobre 100 % es rojo",
+      "default": 90
+    },
+    "fullPercent": {
+      "type": "number",
+      "title": "Ventana llena (%)",
+      "description": "Con este % de la ventana de contexto la franja sugiere compactar o retomar limpio",
+      "default": 70
+    },
+    "longTurns": {
+      "type": "number",
+      "title": "Sesión larga (turnos)",
+      "description": "Turnos sin handoff nuevo desde los que se sugiere cerrar la tarea (sirve donde no hay git)",
+      "default": 30
+    },
+    "showModel": {
+      "type": "boolean",
+      "title": "Mostrar modelo y esfuerzo",
+      "description": "Prefijo con el modelo activo y su nivel de esfuerzo",
+      "default": true
+    }
+  }
+}
