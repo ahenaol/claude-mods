@@ -8,7 +8,7 @@
 
 ```text
 5h ━━━●────── 28% → 82% · ↻ 3h 22m  │  sem ─●──────── 4% → 22% · ↻ 5d 17h
-opus-5-5 · medium  │  118k/1M 12%  │  ◕ caché vence en 42m  │  ✓ handoff 12:53 +6      [ Actualizar handoff ]
+opus-5-5 · medium  │  118k/1M 12%  │  ◕ caché vence en 42m  │  ✔︎ handoff 12:53 +6      [ Actualizar handoff ]
 ```
 
 ## Contenido
@@ -97,7 +97,7 @@ El modelo y el contexto se ven siempre. La caché, el handoff y los botones apar
 | `opus-5-5 · medium` | Modelo y esfuerzo. El esfuerzo sale en amarillo con `xhigh` o `max`, que gastan más cuota por turno |
 | `221k/1M 22%` | Contexto frente a la ventana del modelo. Amarillo desde 100k (`softTokens`) y rojo desde el 70 % de la ventana (`fullPercent`) |
 | `◕ caché vence en 42m` | Estado de la caché (ver [Alertas de caché](#alertas-de-caché)) |
-| `✓ handoff 12:53 +6` | Hora del handoff guardado; `+6` son los turnos que todavía no incluye |
+| `✔︎ handoff 12:53 +6` | Hora del handoff guardado; `+6` son los turnos que todavía no incluye |
 | `◆ handoff de esta carpeta, de hace 3h` | Conversación nueva con un handoff pendiente de esa carpeta |
 
 Además se muestra un solo aviso de cierre de tarea, el primero que aplique: `compacta o retoma limpio` (ventana al 70 %), `¿tarea nueva? (commit hecho)` o `sesión larga (30 turnos)`.

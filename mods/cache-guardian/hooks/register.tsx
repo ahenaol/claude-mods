@@ -33,6 +33,7 @@ import {
   barRuns,
   formatShort,
   quotaView,
+  CHECK,
 } from './logic'
 import type { Ttl } from './logic'
 
@@ -749,7 +750,7 @@ export const register: Register = (on, options) => {
     const warn = status.kind === 'cold' ? '\n(La caché estaba fría: esta vez costó re-leer el contexto.)' : ''
     const at = new Date(r.value.at).toLocaleTimeString('es-CO', { hour12: false })
 
-    return { text: `✓ handoff ${at}\n\n${r.value.text}${warn}` }
+    return { text: `${CHECK} handoff ${at}\n\n${r.value.text}${warn}` }
   })
 
   on('command.run', { command: 'retomar' }, async ($, e, next) => {
@@ -757,7 +758,7 @@ export const register: Register = (on, options) => {
     const saved = fresh(await read($, handoff), await $.clock.now())
     const r = await resumeClean($, saved)
 
-    return { text: r.ok ? '✓ El handoff irá con tu próximo mensaje.' : r.text.replace('usa Compactar', 'usa /compact') }
+    return { text: r.ok ? `${CHECK} El handoff irá con tu próximo mensaje.` : r.text.replace('usa Compactar', 'usa /compact') }
   })
 
   // /clear escrito a mano: después no hay session.start que busque el handoff, así que se busca
@@ -967,7 +968,7 @@ export const register: Register = (on, options) => {
     } else if (saved && big) {
       info.push(
         <Text key="ho">
-          <Text color={isCold ? undefined : 'green'} dimColor={isCold}>✓</Text>
+          <Text color={isCold ? undefined : 'green'} dimColor={isCold}>{CHECK}</Text>
           <Text dimColor> handoff {savedAt}</Text>
           {behind > 0 ? <Text color={isCold ? undefined : 'yellow'} dimColor={isCold}> +{behind}</Text> : null}
         </Text>,
@@ -1042,7 +1043,7 @@ export const register: Register = (on, options) => {
     if (attaching) {
       info.push(
         <Text key="attach" color="green">
-          ✓ el handoff irá con tu próximo mensaje
+          {CHECK} el handoff irá con tu próximo mensaje
         </Text>,
       )
     }

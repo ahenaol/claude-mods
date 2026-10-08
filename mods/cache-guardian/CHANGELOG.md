@@ -2,6 +2,12 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.4.1] - 08/10/2026
+
+### Cambiado
+
+- El chulo del handoff pasa de `✓` (U+2713) a `✔︎` (U+2714 con el selector de texto U+FE0E). Se ve igual en cualquier fuente y nunca se dibuja como emoji de doble ancho.
+
 ## [3.4.0] - 08/10/2026
 
 ### Agregado
@@ -43,5 +49,6 @@ Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Chang
 
 - Primera versión pública del diseño actual: franja de dos zonas (cuota y sesión), cuota de 5 h y semanal con proyección al renovar, reloj de caché, handoff preventivo y guardián del regreso.
 
+[3.4.1]: https://github.com/ahenaol/claude-mods/releases/tag/cache-guardian-v3.4.1
 [3.4.0]: https://github.com/ahenaol/claude-mods/releases/tag/cache-guardian-v3.4.0
 [3.3.0]: https://github.com/ahenaol/claude-mods/tree/2dd3f54/mods/cache-guardian

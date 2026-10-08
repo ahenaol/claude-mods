@@ -8,6 +8,9 @@ export const WINDOWS: Record<string, { label: string; ms: number }> = {
   seven_day: { label: 'sem', ms: 7 * 24 * HOUR },
 }
 
+// ✔ forzado a texto (U+FE0E): una columna y sin versión emoji en ninguna terminal.
+export const CHECK = '\u2714\uFE0E'
+
 export type Ttl = '1h' | '5m'
 
 export const ttlMs = (ttl: Ttl): number => (ttl === '5m' ? 5 * MINUTE : HOUR)
@@ -323,7 +326,7 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     '  Antes de la marca vas por debajo del ritmo ideal; después, por encima.',
     '  "~28%": más de 15 min sin respuestas, el dato es el de la última. "renovada": la ventana ya se reinició.',
     '',
-    'Sesión:  opus-5-5 · medium  │  118k/1M 12%  │  ● caché vence en 59m  │  ✓ handoff 12:53 +3',
+    `Sesión:  opus-5-5 · medium  │  118k/1M 12%  │  ● caché vence en 59m  │  ${CHECK} handoff 12:53 +3`,
     '  Modelo y esfuerzo: xhigh y max en amarillo (gastan más cuota por turno).',
     `  Contexto: amarillo desde ${formatTokens(c.softTokens)} (cada turno lo relee), rojo desde el ${c.fullPercent} % de la ventana.`,
     `  Caché (desde ${formatTokens(c.minTokens)}): el círculo se vacía con su vida (● ◕ ◑ ◔) · ● cian, respondiendo.`,

@@ -9,7 +9,7 @@
       "name": "cache-guardian",
       "source": "./mods/cache-guardian",
       "description": "Reloj de caché, cuota (5 h y semanal) frente al ritmo ideal, handoff preventivo y guardián del regreso",
-      "version": "3.4.0"
+      "version": "3.4.1"
     }
   ]
 }
