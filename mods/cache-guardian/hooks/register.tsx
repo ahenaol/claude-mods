@@ -34,8 +34,21 @@ import {
   formatShort,
   quotaView,
   CHECK,
+  PRICE_KEEP,
+  PRICE_MIN_SAMPLES,
+  RATE_KEEP,
+  RATE_MIN_SAMPLES,
+  addSample,
+  formatShare,
+  learned,
+  modelKey,
+  priceSample,
+  quotaSample,
+  rewriteShare,
+  shareStatus,
+  usageUnits,
 } from './logic'
-import type { Ttl } from './logic'
+import type { QuotaMark, Samples, Ttl } from './logic'
 
 const lastEnd = atom({ plugin: 'cache-guardian', key: 'lastEnd' } as const, null as number | null)
 const tokens = atom({ plugin: 'cache-guardian', key: 'tokens' } as const, 0)
@@ -57,6 +70,9 @@ const quotaAt = atom({ plugin: 'cache-guardian', key: 'quotaAt' } as const, 0)
 const sessionKey = atom({ plugin: 'cache-guardian', key: 'sessionKey' } as const, '')
 // Carga dueña de los temporizadores: los de una carga anterior (antes de recargar la mod) se apagan solos.
 const owner = atom({ plugin: 'cache-guardian', key: 'owner' } as const, '')
+// Lo aprendido para expresar la reescritura en % de la ventana de 5 h (ver logic.ts).
+const quotaRate = atom({ plugin: 'cache-guardian', key: 'quotaRate' } as const, null as number | null)
+const prices = atom({ plugin: 'cache-guardian', key: 'prices' } as const, {} as Record<string, number>)
 
 const PANE = 'cg-guardian'
 const LOAD = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
@@ -87,6 +103,11 @@ let endedId = ''
 let isStepAnswered = false
 // Retomar limpio en curso: dos clics seguidos no limpian dos veces.
 let isResuming = false
+// Última lectura de la ventana de 5 h con el costo de la sesión: base de la próxima muestra de % por dólar.
+let quotaBase: QuotaMark | null = null
+// Costo y tokens del turno en curso, para aprender el precio por token. Solo sirve si respondió un único
+// modelo y nada más cobró dentro del turno (compactación, búsqueda web del servidor).
+let turnCost: { usd: number | null; units: number; models: Set<string>; isDirty: boolean } | null = null
 
 const loadTtl = async ($: any): Promise<Ttl> =>
   effectiveTtl(String(cfg.ttl), ((await $.store.get('cg.ttl')) as Ttl | null) ?? null)
@@ -96,6 +117,8 @@ const loadTtl = async ($: any): Promise<Ttl> =>
 const folderKey = (cwd: string) => `cg.handoff.${cwd}`
 const ownKey = (id: string) => `cg.ho.${id}`
 const lastKey = (id: string) => `cg.last.${id}`
+const RATE_KEY = 'cg.qrate'
+const priceKey = (model: string) => `cg.price.${model}`
 
 // `n`: turnos respondidos en la conversación, contados por la mod. `$.session.turns()` también cuenta
 // las filas de los comandos (/clear, /effort, /handoff), así que no sirve para saber cuántos turnos
@@ -107,6 +130,46 @@ const asHandoff = (v: unknown): Handoff | null => (v && typeof v === 'object' ? 
 // Un handoff vale 7 días. El de carpeta además se ofrece una sola vez.
 const fresh = (h: Handoff | null, now: number): Handoff | null => (h && now - h.at < HANDOFF_TTL_MS ? h : null)
 const offerable = (h: Handoff | null, now: number): Handoff | null => (h && !h.isConsumed ? fresh(h, now) : null)
+
+const asSamples = (v: unknown): Samples | null =>
+  v && typeof v === 'object' && Array.isArray((v as Samples).samples) ? (v as Samples) : null
+
+// Costo acumulado de la sesión, en dólares; null donde el motor no lleva la cuenta (o al fallar).
+const sessionUsd = async ($: any): Promise<number | null> => {
+  const usd = (await $.session.usage().catch(() => null))?.cost?.usd
+
+  return typeof usd === 'number' ? usd : null
+}
+
+// Pasa lo aprendido de $.store al estado que lee la franja. Corre antes de prune (que va al final del
+// arranque), así que ignora por su cuenta lo caducado.
+async function loadLearned($: any) {
+  const now = await $.clock.now()
+  const live = (v: unknown): Samples | null => {
+    const s = asSamples(v)
+    return s && now - s.at <= KEEP_MS ? s : null
+  }
+  const rate = learned(live(await $.store.get(RATE_KEY)), RATE_MIN_SAMPLES)
+  await update($, quotaRate, () => rate)
+  const out: Record<string, number> = {}
+  for (const k of (await $.store.keys()) as string[]) {
+    if (!k.startsWith('cg.price.')) continue
+    const v = learned(live(await $.store.get(k)), PRICE_MIN_SAMPLES)
+    if (v !== null) out[k.slice('cg.price.'.length)] = v
+  }
+  await update($, prices, () => out)
+}
+
+// Cuánto de la ventana de 5 h costaría reescribir `tk` tokens con el modelo activo; null sin datos.
+async function shareOf($: any, tk: number): Promise<number | null> {
+  const model = modelKey((await read($, modelName)) || '')
+  const price = model ? ((await read($, prices))[model] ?? null) : null
+
+  return rewriteShare(tk, await loadTtl($), price, await read($, quotaRate))
+}
+
+// " (≈6% de tu ventana de 5 h)", o nada si todavía no se sabe.
+const shareSuffix = (share: number | null): string => (share === null ? '' : ` (${formatShare(share)} de tu ventana de 5 h)`)
 
 // Guarda por conversación la última respuesta y los turnos, para que un --continue, un /resume o una
 // recarga de la mod sepan si la caché sigue tibia y cuántos turnos lleva.
@@ -181,7 +244,8 @@ async function restore($: any) {
     const status = cacheStatus(last.at, await loadTtl($), now)
     if (status.kind === 'cold' && tk > cfg.minTokens) {
       $.ui.toast(
-        `Caché fría: re-cachear ${formatTokens(tk)} tokens. ` + (own ? 'Tienes handoff: prueba /retomar.' : 'Considera compactar.'),
+        `Caché fría: re-cachear ${formatTokens(tk)} tokens${shareSuffix(await shareOf($, tk))}. ` +
+          (own ? 'Tienes handoff: prueba /retomar.' : 'Considera compactar.'),
         { timeoutMs: 9000 },
       )
     }
@@ -223,12 +287,19 @@ function queueSync($: any, tries = 0) {
 }
 
 // Borra lo guardado que ya caducó y las claves de versiones anteriores (`cg.last./ruta`, `handoff:ruta`).
+// Lo aprendido de la cuota también caduca: sin muestras en 30 días, el plan o los precios pudieron cambiar.
 async function prune($: any) {
   const now = await $.clock.now()
   for (const k of (await $.store.keys()) as string[]) {
     if (k.startsWith('cg.last./') || k.startsWith('handoff:')) {
       await $.store.delete(k)
-    } else if (k.startsWith('cg.last.') || k.startsWith('cg.ho.') || k.startsWith('cg.handoff.')) {
+    } else if (
+      k.startsWith('cg.last.') ||
+      k.startsWith('cg.ho.') ||
+      k.startsWith('cg.handoff.') ||
+      k === RATE_KEY ||
+      k.startsWith('cg.price.')
+    ) {
       const v = (await $.store.get(k)) as { at?: number } | null
       if (!v || typeof v.at !== 'number' || now - v.at > KEEP_MS) await $.store.delete(k)
     }
@@ -405,6 +476,34 @@ async function afterModelCommand($: any, e: { command: string; args: string }, o
   if (!isSure) $.clock.after(3000, () => refreshModel($, e.command, e.args))
 }
 
+// Muestra de % por dólar con cada lectura de la ventana de 5 h (ver quotaSample).
+async function learnRate($: any, windows: readonly QuotaWindow[], usd: number | undefined, at: number) {
+  const five = windows.find(w => w.kind === 'five_hour')
+  if (!five?.resetsAt || typeof usd !== 'number') return
+  const r = quotaSample(quotaBase, { percent: five.percentUsed, usd, at, resetsAt: five.resetsAt })
+  quotaBase = r.base
+  if (r.sample === null) return
+  const next = addSample(asSamples(await $.store.get(RATE_KEY)), r.sample, at, RATE_KEEP)
+  await $.store.set(RATE_KEY, next)
+  await update($, quotaRate, () => learned(next, RATE_MIN_SAMPLES))
+}
+
+// Muestra de precio por token al cerrar un turno de un solo modelo, con lo que subió el costo de la sesión.
+async function learnPrice($: any, at: number) {
+  const t = turnCost
+  turnCost = null
+  if (!t || t.isDirty || t.usd === null || t.models.size !== 1) return
+  const end = await sessionUsd($)
+  if (end === null) return
+  const sample = priceSample(end - t.usd, t.units)
+  if (sample === null) return
+  const model = [...t.models][0]!
+  const next = addSample(asSamples(await $.store.get(priceKey(model))), sample, at, PRICE_KEEP)
+  await $.store.set(priceKey(model), next)
+  const value = learned(next, PRICE_MIN_SAMPLES)
+  if (value !== null) await update($, prices, p => ({ ...p, [model]: value }))
+}
+
 async function resend($: any, text: string) {
   bypass = true
   await $.prompt.submit({ text, asUser: true })
@@ -435,7 +534,10 @@ export const register: Register = (on, options) => {
     await update($, owner, () => LOAD)
     // Una recarga a mitad de un handoff deja la marca puesta y la carga anterior ya no la quita.
     await update($, isWriting, () => false)
-    await restore($)
+    quotaBase = null
+    turnCost = null
+    await loadLearned($)
+    // El modelo antes que restore: su aviso de caché fría dice el % con el precio de este modelo.
     await update($, modelName, () => '')
     try {
       const current = String(await $.session.model())
@@ -443,6 +545,7 @@ export const register: Register = (on, options) => {
     } catch {
       // Sin modelo todavía: se completa en el primer turno.
     }
+    await restore($)
     await $.command.register({ name: 'guardian', description: 'Explica cómo leer la franja de caché, cuota y handoff' })
     await $.command.register({ name: 'handoff', description: 'Escribe el handoff de esta conversación ahora' })
     await $.command.register({
@@ -485,6 +588,7 @@ export const register: Register = (on, options) => {
       autoTimer = null
       probe = null
       warned = 0
+      turnCost = null
       // Se rehace apenas el motor pase a la conversación siguiente.
       queueSync($)
     }
@@ -497,6 +601,7 @@ export const register: Register = (on, options) => {
     isStepAnswered = false
     await update($, isBusy, () => true)
     await update($, isTaskDone, () => false)
+    turnCost = { usd: await sessionUsd($), units: 0, models: new Set(), isDirty: false }
 
     return next(e)
   })
@@ -518,6 +623,7 @@ export const register: Register = (on, options) => {
     } else {
       await remember($)
     }
+    await learnPrice($, now)
 
     return result
   })
@@ -532,6 +638,12 @@ export const register: Register = (on, options) => {
     }
     const result = yield* next(e)
     if (!e.agentId && result.usage) isStepAnswered = true
+    // Todo lo que respondió dentro del turno, subagentes incluidos, para el precio por token.
+    if (turnCost && result.usage) {
+      turnCost.units += usageUnits(result.usage, await loadTtl($))
+      turnCost.models.add(modelKey(String(result.usage.model ?? e.model)))
+    }
+    if (turnCost && result.serverToolUses?.length) turnCost.isDirty = true
     if (!e.agentId && e.index === 0 && probe) {
       const u = result.usage
       if (u && String(cfg.ttl) === 'auto') {
@@ -545,6 +657,13 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  // Una compactación dentro del turno cobra sin pasar por turn.step: ese turno no sirve para el precio.
+  on('session.compact', async ($, e, next) => {
+    if (turnCost) turnCost.isDirty = true
+
+    return next(e)
+  })
+
   // Tokens y cuota llegan empujados por el motor.
   on('session.measure', async ($, e, next) => {
     const tk = e.context.tokens ?? 0
@@ -553,6 +672,7 @@ export const register: Register = (on, options) => {
       await update($, quota, () => e.rateLimits)
       const at = await $.clock.now()
       await update($, quotaAt, () => at)
+      await learnRate($, e.rateLimits, e.cost?.usd, at)
     }
     await update($, windowSize, () => e.context.window)
     if (tk < cfg.softTokens) {
@@ -649,7 +769,7 @@ export const register: Register = (on, options) => {
     if (!placed.isPlaced) {
       // Sin panel no hay forma de elegir: el mensaje sigue su curso y no se pierde.
       await update($, guardian, () => null)
-      $.ui.toast(`Caché fría: este mensaje re-cachea ${formatTokens(tk)} tokens (sin panel para elegir).`, {
+      $.ui.toast(`Caché fría: este mensaje re-cachea ${formatTokens(tk)} tokens${shareSuffix(await shareOf($, tk))} (sin panel para elegir).`, {
         timeoutMs: 8000,
       })
 
@@ -666,12 +786,13 @@ export const register: Register = (on, options) => {
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const saved = fresh(await read($, handoff), await $.clock.now())
+    const share = await shareOf($, g.tokens)
 
     return (
       <Box flexDirection="column">
         <Text color="gray">
           ○ {g.coldMs > KEEP_MS ? 'La caché está fría' : `La caché venció hace ${formatSpan(g.coldMs)}`}. Enviar así
-          re-cachea {formatTokens(g.tokens)} tokens.
+          re-cachea {formatTokens(g.tokens)} tokens{shareSuffix(share)}.
         </Text>
         <Text dimColor>
           {g.hasHandoff
@@ -798,7 +919,18 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  on('command.run', { command: 'guardian' }, () => ({ text: legend(cfg) }))
+  on('command.run', { command: 'guardian' }, async ($, e, next) => {
+    const model = (await read($, modelName)) || ''
+    const rate = asSamples(await $.store.get(RATE_KEY))
+    const price = model ? asSamples(await $.store.get(priceKey(modelKey(model)))) : null
+    const status = shareStatus({
+      rateSamples: rate?.samples.length ?? 0,
+      priceSamples: price?.samples.length ?? 0,
+      model: model ? modelKey(model) : '',
+    })
+
+    return { text: `${legend(cfg)}\n\n${status}` }
+  })
 
   // Franja sobre el prompt, en dos zonas de posición fija para que nada salte de lugar:
   //   1. Cuenta (arriba): cuota de 5 h y semanal. Es contexto ambiental, cambia despacio.
@@ -1052,10 +1184,14 @@ export const register: Register = (on, options) => {
 
     // Caché fría con contexto grande: una línea propia que dice el costo. Llega casi siempre mientras no
     // estás, así que la línea extra no mueve nada que estés leyendo.
+    // Con el % aprendido, el costo va primero: es lo que se decide, y la línea se corta por el final.
+    const share = isCold ? await shareOf($, tk) : null
     const banner = isCold ? (
       <Box key="banner">
         <Text backgroundColor="red" color="black" bold wrap="truncate-end">
-          {` ▲ Tu próximo mensaje reescribe ${formatTokens(tk)} tokens de contexto a precio completo `}
+          {share === null
+            ? ` ▲ Tu próximo mensaje reescribe ${formatTokens(tk)} tokens de contexto a precio completo `
+            : ` ▲ Tu próximo mensaje cuesta ${formatShare(share)} de tu 5h: reescribe ${formatTokens(tk)} tokens de contexto `}
         </Text>
       </Box>
     ) : null

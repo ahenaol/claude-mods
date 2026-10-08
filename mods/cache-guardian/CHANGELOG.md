@@ -2,6 +2,14 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.5.0] - 08/10/2026
+
+### Agregado
+
+- Con la caché fría, la línea roja dice cuánto de tu ventana de 5 h cuesta el próximo mensaje: `▲ Tu próximo mensaje cuesta ≈6% de tu 5h: reescribe 221k tokens de contexto`. El mismo dato sale en el panel del guardián y en los avisos de caché fría.
+- El mod lo aprende de tu propio consumo, sin llamadas de red: compara cuánto sube la ventana de 5 h con el costo de la sesión y, por modelo, el costo de cada turno con sus tokens. Mientras no tiene 5 muestras de cuota y 3 de precio del modelo activo, la línea dice solo los tokens, como antes.
+- `/guardian` dice cuánto le falta al aprendizaje (`aprendiendo (cuota 2/5, precio de opus-5-5 3/3)`).
+
 ## [3.4.1] - 08/10/2026
 
 ### Cambiado
@@ -49,6 +57,7 @@ Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Chang
 
 - Primera versión pública del diseño actual: franja de dos zonas (cuota y sesión), cuota de 5 h y semanal con proyección al renovar, reloj de caché, handoff preventivo y guardián del regreso.
 
+[3.5.0]: https://github.com/ahenaol/claude-mods/releases/tag/cache-guardian-v3.5.0
 [3.4.1]: https://github.com/ahenaol/claude-mods/releases/tag/cache-guardian-v3.4.1
 [3.4.0]: https://github.com/ahenaol/claude-mods/releases/tag/cache-guardian-v3.4.0
 [3.3.0]: https://github.com/ahenaol/claude-mods/tree/2dd3f54/mods/cache-guardian

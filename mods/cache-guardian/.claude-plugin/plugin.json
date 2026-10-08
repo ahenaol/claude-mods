@@ -1,6 +1,6 @@
 {
   "name": "cache-guardian",
-  "version": "3.4.1",
+  "version": "3.5.0",
   "description": "Reloj de caché, cuota (5 h y semanal) frente al ritmo ideal, handoff preventivo y guardián del regreso",
   "author": {
     "name": "Alejandro Henao Loaiza",

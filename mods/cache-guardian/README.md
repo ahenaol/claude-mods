@@ -1,6 +1,6 @@
 # cache-guardian
 
-[![Versión](https://img.shields.io/badge/versi%C3%B3n-3.4.1-6a4fd8.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versi%C3%B3n-3.5.0-6a4fd8.svg)](CHANGELOG.md)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.289-d97757.svg)](https://claude.com/claude-code)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../LICENSE)
 
@@ -45,6 +45,7 @@ La clave es escribir el handoff **mientras la caché sigue tibia**, no después.
 | Modelo y esfuerzo | Con qué modelo y nivel de esfuerzo estás gastando la cuota |
 | Reloj de caché | Si la caché está tibia o fría, cuánto le queda y cuánto pesa la conversación |
 | Alertas que escalan | Avisos que suben de intensidad solo cuando hay costo real |
+| Costo en % de la cuota | Con la caché fría, cuánto de tu ventana de 5 h te cuesta el próximo mensaje (`≈6%`), aprendido de tu propio consumo |
 | Handoff | Un resumen escrito mientras releer el contexto todavía es barato |
 | Guardián del regreso | Si vuelves con la caché fría y un contexto grande, retiene tu mensaje y te deja elegir cómo seguir |
 
@@ -111,7 +112,22 @@ La alerta sube de intensidad con la urgencia, y solo cuando el contexto supera `
 | Tibia | `● ◕ ◑ ◔ caché vence en 42m` en verde | El círculo se vacía con la vida de la caché |
 | Por vencer | `◔ caché vence en 4m` en amarillo | Últimos 5 minutos (75 s con TTL de 5 min) |
 | Último minuto | Pastilla amarilla `VENCE EN 0:48`, con **Actualizar handoff** destacado | Último minuto (37 s con TTL de 5 min) |
-| Fría | Línea roja `▲ Tu próximo mensaje reescribe 221k tokens de contexto a precio completo`, el resto de la sesión atenuado y **Retomar limpio** destacado | La caché ya venció |
+| Fría | Línea roja `▲ Tu próximo mensaje cuesta ≈6% de tu 5h: reescribe 221k tokens de contexto`, el resto de la sesión atenuado y **Retomar limpio** destacado | La caché ya venció |
+
+### El costo en % de tu ventana de 5 h
+
+La API no informa la cuota en tokens, solo el % usado. Por eso el mod aprende la equivalencia de tu propio consumo:
+
+| Qué aprende | De dónde | Muestras para usarla |
+| --- | --- | --- |
+| Cuánto % de la ventana de 5 h cuesta cada dólar | Cuánto sube la ventana frente al costo de la sesión, cada vez que avanza un punto entero | 5 |
+| Cuánto cuesta un token de entrada del modelo activo | El costo de un turno frente a sus tokens, solo en turnos de un único modelo | 3 por modelo |
+
+```text
+% de la reescritura = tokens del contexto × peso de escritura (2 con TTL de 1 h, 1,25 con 5 min) × precio por token × % por dólar
+```
+
+Mientras faltan muestras, la línea roja dice solo los tokens; `/guardian` muestra cuánto falta. Es una estimación: el consumo de otras sesiones de la misma cuenta (otro equipo, claude.ai) se mezcla con el de esta, y el mod descarta lo sospechoso (saltos de más de 10 puntos, lecturas a más de 30 minutos de distancia) y usa la mediana. Lo aprendido se guarda en tu equipo y caduca si pasan 30 días sin muestras nuevas. Con API key no hay dato de cuota y la línea sigue en tokens.
 
 Cada color tiene un solo significado en toda la franja: el amarillo es "atención" y el rojo es "esto te cuesta cuota ahora", igual que en la cuota y en el contexto.
 
@@ -171,7 +187,7 @@ Las opciones se cambian desde `/config` o en `~/.claude/settings.json`, bajo `pl
 
 ## Privacidad
 
-El mod no hace llamadas de red propias ni envía datos a terceros. La cuota sale de los datos que Claude Code ya recibe en cada turno. El handoff se genera con tu misma sesión y se guarda solo en tu equipo.
+El mod no hace llamadas de red propias ni envía datos a terceros. La cuota y el costo de la sesión salen de los datos que Claude Code ya recibe en cada turno. El handoff se genera con tu misma sesión y se guarda solo en tu equipo.
 
 ## Solución de problemas
 
@@ -179,6 +195,7 @@ El mod no hace llamadas de red propias ni envía datos a terceros. La cuota sale
 | --- | --- |
 | No veo la franja | Aparece después de la primera respuesta. Revisa `claude plugin list` y busca en el chat una línea tenue `cache-guardian:` con el motivo |
 | No aparece la cuota | Sin suscripción, antes de la primera respuesta, o con `showQuota` en `false` |
+| La línea roja no dice el % | El mod sigue aprendiendo: `/guardian` dice cuántas muestras faltan. Con API key no hay dato de cuota |
 | Dice "tibia" pero la caché estaba fría | Tu TTL es de 5 minutos y el mod todavía no lo aprendió: fija `ttl` en `5m` |
 | La tecla `h` no hace nada | La franja no tiene el foco: haz clic en ella o usa `ctrl+x tab` primero |
 | **Retomar limpio** deja el mensaje en el prompt | El motor no permitió reenviarlo: pulsa Enter y el handoff sale con él |
@@ -194,9 +211,9 @@ cache-guardian/
 ├── hooks/
 │   ├── hooks.json               apunta al módulo
 │   ├── register.tsx             hooks y franja
-│   └── logic.ts                 lógica pura: ideal, ritmo, barra, TTL, niveles de alerta, formatos
+│   └── logic.ts                 lógica pura: ideal, ritmo, barra, TTL, niveles de alerta, costo en % de 5 h, formatos
 ├── types/index.d.ts             contrato del estado del mod
-├── tests/                       pruebas de la lógica, la franja y el handoff sobre una sesión simulada
+├── tests/                       pruebas de la lógica, la franja, el handoff y el costo en % sobre una sesión simulada
 ├── CHANGELOG.md
 └── README.md
 ```

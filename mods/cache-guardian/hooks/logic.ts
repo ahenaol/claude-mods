@@ -253,6 +253,99 @@ export const formatProjection = (p: number): string => (p > 199 ? '>200' : padPe
 // "claude-fable-5-1" -> "fable-5-1"; "claude-haiku-4-5-20251001" -> "haiku-4-5".
 export const formatModel = (id: string): string => id.replace(/^claude-/, '').replace(/-\d{8}$/, '')
 
+// ── Reescritura en % de la ventana de 5 h ──
+// La API no da la cuota en tokens, solo el % usado. El mod aprende dos cosas de tu propio consumo:
+//   1. cuánto % de la ventana de 5 h cuesta cada dólar (del costo de la sesión frente al % que sube);
+//   2. cuánto cuesta un token de entrada de cada modelo (del costo de un turno frente a sus tokens).
+// Con eso, reescribir N tokens cuesta N × peso de escritura × precio × % por dólar.
+
+// Pesos de precio frente a un token de entrada, los mismos en todos los modelos: la salida vale 5,
+// leer de la caché 0,1 y escribir en ella 1,25 (TTL de 5 min) o 2 (TTL de 1 h).
+export const writeWeight = (ttl: Ttl): number => (ttl === '5m' ? 1.25 : 2)
+
+export type TokenUsage = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+}
+
+// Una respuesta en "tokens de entrada equivalentes".
+export const usageUnits = (u: TokenUsage, ttl: Ttl): number =>
+  u.input_tokens + 5 * u.output_tokens + 0.1 * u.cache_read_input_tokens + writeWeight(ttl) * u.cache_creation_input_tokens
+
+// Clave del precio por modelo: sin prefijo, fecha ni sufijo de ventana ("opus-5-5[1m]" -> "opus-5-5").
+export const modelKey = (id: string): string => formatModel(id).replace(/\[[^\]]*\]$/, '')
+
+export const median = (xs: readonly number[]): number | null => {
+  if (xs.length === 0) return null
+  const s = [...xs].sort((a, b) => a - b)
+  const mid = Math.floor(s.length / 2)
+
+  return s.length % 2 === 1 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2
+}
+
+// Muestras guardadas en $.store, con la fecha de la última para caducarlas como el resto.
+export type Samples = { samples: number[]; at: number }
+
+export const addSample = (prev: Samples | null, value: number, at: number, keep: number): Samples => ({
+  samples: [...(prev?.samples ?? []), value].slice(-keep),
+  at,
+})
+
+// Muestras mínimas antes de mostrar el %: mientras tanto la franja dice solo los tokens. El precio
+// es exacto por turno y basta con menos; el % por dólar se ensucia con otras sesiones y pide más.
+export const RATE_MIN_SAMPLES = 5
+export const PRICE_MIN_SAMPLES = 3
+export const RATE_KEEP = 20
+export const PRICE_KEEP = 10
+
+// El valor aprendido, o null si todavía no hay muestras suficientes.
+export const learned = (s: Samples | null, min: number): number | null =>
+  s && s.samples.length >= min ? median(s.samples) : null
+
+// Lectura de la ventana de 5 h junto con el costo de la sesión en ese momento.
+export type QuotaMark = { percent: number; usd: number; at: number; resetsAt: string }
+
+// Más de este tiempo entre dos lecturas y otra sesión (otro equipo, claude.ai, el celular) tiene
+// demasiado margen para mover la cuota: la muestra se descarta.
+export const QUOTA_SAMPLE_MAX_MS = 30 * MINUTE
+
+// Una muestra de "% de la ventana por dólar": cuánto subió la cuota frente a lo que gastó esta sesión.
+// Se toma cuando la cuota subió al menos un punto entero, para que el redondeo a un decimal pese
+// poco. Se descarta (y se empieza de nuevo desde la lectura actual) si la ventana se renovó, si el
+// % o el costo bajaron (otra conversación) o si pasó demasiado tiempo. Un salto de más de 10 puntos
+// es casi seguro de otra sesión.
+export const quotaSample = (base: QuotaMark | null, cur: QuotaMark): { sample: number | null; base: QuotaMark } => {
+  if (
+    !base ||
+    cur.resetsAt !== base.resetsAt ||
+    cur.percent < base.percent ||
+    cur.usd < base.usd ||
+    cur.at - base.at > QUOTA_SAMPLE_MAX_MS
+  ) {
+    return { sample: null, base: cur }
+  }
+  const dp = cur.percent - base.percent
+  if (dp < 1) return { sample: null, base }
+  const du = cur.usd - base.usd
+  if (du <= 0 || dp > 10) return { sample: null, base: cur }
+
+  return { sample: dp / du, base: cur }
+}
+
+// Una muestra de "dólares por token de entrada" de un turno de un solo modelo. Con muy pocos tokens
+// el costo redondeado domina y la muestra no sirve.
+export const priceSample = (usdDelta: number, units: number): number | null =>
+  units >= 1000 && usdDelta > 0 ? usdDelta / units : null
+
+// Cuánto de la ventana de 5 h cuesta reescribir `tokens` en la caché.
+export const rewriteShare = (tokens: number, ttl: Ttl, price: number | null, rate: number | null): number | null =>
+  price === null || rate === null || tokens <= 0 ? null : tokens * writeWeight(ttl) * price * rate
+
+// "≈6%", "<1%": siempre aproximado, sin decimales.
+export const formatShare = (p: number): string => (p < 1 ? '<1%' : `≈${Math.round(p)}%`)
+
 export const isHighEffort = (effort: string): boolean => effort === 'xhigh' || effort === 'max'
 
 export type ContextHint = { kind: 'full' | 'heavy' | 'task' | 'long'; text: string }
@@ -332,6 +425,7 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     `  Caché (desde ${formatTokens(c.minTokens)}): el círculo se vacía con su vida (● ◕ ◑ ◔) · ● cian, respondiendo.`,
     '    Amarillo en los últimos 5 min · pastilla "VENCE EN 0:48" en el último minuto, con la acción principal destacada.',
     '    Fría (○): una línea roja dice cuánto reescribe tu próximo mensaje, y el resto de la sesión se atenúa.',
+    '    Cuando el mod ya aprendió tu consumo, la línea lo dice en % de tu ventana de 5 h (≈6%), además de los tokens.',
     '  Handoff: hora del resumen guardado (con la fecha si no es de hoy); +3 son los turnos que no incluye.',
     `  Avisos en amarillo: compacta o retoma limpio (${c.fullPercent} %) · ¿tarea nueva? (tras un commit) · sesión larga.`,
     '',
@@ -343,3 +437,17 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     'Al volver: abre claude en la misma carpeta. Una conversación nueva ofrece el último handoff de la carpeta (una vez);',
     '  --continue o --resume retoman la conversación y, si la caché está fría, el guardián te deja elegir antes de enviar.',
   ].join('\n')
+
+// Línea de /guardian con el avance del aprendizaje del % de la ventana de 5 h.
+export const shareStatus = (a: { rateSamples: number; priceSamples: number; model: string }): string => {
+  const rate = Math.min(a.rateSamples, RATE_MIN_SAMPLES)
+  const price = Math.min(a.priceSamples, PRICE_MIN_SAMPLES)
+  if (rate >= RATE_MIN_SAMPLES && price >= PRICE_MIN_SAMPLES) {
+    return `Reescritura en % de la ventana de 5 h: lista para ${a.model || 'este modelo'}.`
+  }
+
+  return (
+    `Reescritura en % de la ventana de 5 h: aprendiendo (cuota ${rate}/${RATE_MIN_SAMPLES}, ` +
+    `precio de ${a.model || 'este modelo'} ${price}/${PRICE_MIN_SAMPLES}). Mientras tanto la franja muestra solo los tokens.`
+  )
+}

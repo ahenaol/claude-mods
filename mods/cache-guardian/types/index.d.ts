@@ -43,6 +43,10 @@ declare module 'claude-code' {
       quotaAt: number
       sessionKey: string
       owner: string
+      // % de la ventana de 5 h por dólar, ya aprendido; null mientras falten muestras.
+      quotaRate: number | null
+      // Dólares por token de entrada, por modelo (clave de modelKey), solo los ya aprendidos.
+      prices: Record<string, number>
     }
   }
 }

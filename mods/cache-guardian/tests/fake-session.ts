@@ -13,6 +13,8 @@ export type Fake = {
   messages: { role: 'user' | 'assistant'; text: string; toolUses: [] }[]
   tokens: number | undefined
   window: number
+  // Costo acumulado de la sesión que informa el motor; sin él, el motor no lleva la cuenta.
+  usd: number | undefined
   fork: { isAnswered: true; text: string; usage: object } | { isAnswered: false; reason: string; status?: number }
   forks: number
   toasts: string[]
@@ -29,6 +31,7 @@ export function fakeSession(on: any, store: Record<string, unknown> = {}) {
     messages: [],
     tokens: undefined,
     window: 1_000_000,
+    usd: undefined,
     fork: { isAnswered: true, text: '## Objetivo\nProbar el handoff.', usage: {} },
     forks: 0,
     toasts: [],
@@ -53,7 +56,14 @@ export function fakeSession(on: any, store: Record<string, unknown> = {}) {
   on('session.messages', () => ({ value: f.messages }) as never)
   on('session.model', () => ({ value: 'claude-opus-5-5' }) as never)
   on('session.usage', () =>
-    ({ value: { startedAt: NOW, context: { tokens: f.tokens, window: f.window }, rateLimits: [] } }) as never,
+    ({
+      value: {
+        startedAt: NOW,
+        context: { tokens: f.tokens, window: f.window },
+        rateLimits: [],
+        ...(f.usd === undefined ? {} : { cost: { usd: f.usd } }),
+      },
+    }) as never,
   )
   on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }) as never)
   on('turn.complete', () => ({ text: '' }) as never)
