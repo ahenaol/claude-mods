@@ -11,6 +11,9 @@ import {
   autoLeadMs,
   behindOf,
   cacheStatus,
+  cacheGlyph,
+  cacheLevel,
+  formatSeconds,
   formatClock,
   hasHistory,
   isCommandText,
@@ -450,6 +453,18 @@ export const register: Register = (on, options) => {
       if ((await read($, owner)) !== LOAD) return clock.cancel()
       await update($, tick, n => n + 1)
     })
+    // Segundero: solo redibuja en el último minuto de la caché (cuenta regresiva) y en el segundo en
+    // que se enfría (la alerta sale sin esperar al reloj de un minuto).
+    const seconds = $.clock.every(1000, async () => {
+      if ((await read($, owner)) !== LOAD) return seconds.cancel()
+      const end = await read($, lastEnd)
+      if (end === null || (await read($, tokens)) <= cfg.minTokens) return
+      const ttl = await loadTtl($)
+      const s = cacheStatus(end, ttl, await $.clock.now())
+      if ((s.kind === 'warm' && cacheLevel(s.leftMs, ttl) === 'last') || (s.kind === 'cold' && s.coldMs < 1000)) {
+        await update($, tick, n => n + 1)
+      }
+    })
     await prune($)
 
     return result
@@ -828,6 +843,10 @@ export const register: Register = (on, options) => {
           longTurns: cfg.longTurns,
         })
       : null
+    // La alerta escala con la urgencia y solo con costo real (contexto sobre minTokens, sin turno en curso).
+    const level = status.kind === 'warm' ? cacheLevel(status.leftMs, ttl) : null
+    const isCold = big && !busy && status.kind === 'cold'
+    const isLast = big && !busy && level === 'last'
 
     // Separador de zonas y piezas: `│` atenuado. La marca de la barra es un triángulo para no competir con él.
     const sep = (k: string) => (
@@ -895,33 +914,45 @@ export const register: Register = (on, options) => {
     const info = []
     if (model || effort) {
       info.push(
-        <Text key="model" dimColor={!isHighEffort(effort)}>
+        <Text key="model" dimColor={isCold || !isHighEffort(effort)}>
           <Text dimColor>{model ? formatModel(model) : ''}</Text>
           {model && effort ? <Text dimColor> · </Text> : null}
-          {effort ? <Text color={isHighEffort(effort) ? 'yellow' : undefined} dimColor={!isHighEffort(effort)}>{effort}</Text> : null}
+          {effort ? (
+            <Text color={isHighEffort(effort) && !isCold ? 'yellow' : undefined} dimColor={isCold || !isHighEffort(effort)}>
+              {effort}
+            </Text>
+          ) : null}
         </Text>,
       )
     }
     if (tk > 0) {
-      const ctxColor = hint?.kind === 'full' ? 'red' : hint?.kind === 'heavy' ? 'yellow' : undefined
+      // Con la caché fría todo lo demás se atenúa: el único color de la línea es el de la alerta.
+      const ctxColor = isCold ? undefined : hint?.kind === 'full' ? 'red' : hint?.kind === 'heavy' ? 'yellow' : undefined
       info.push(
         <Text key="ctx">
-          <Text color={ctxColor}>{win > 0 ? `${formatTokens(tk)}/${formatTokens(win)}` : formatTokens(tk)}</Text>
+          <Text color={ctxColor} dimColor={isCold}>{win > 0 ? `${formatTokens(tk)}/${formatTokens(win)}` : formatTokens(tk)}</Text>
           {win > 0 ? <Text color={ctxColor} dimColor={!ctxColor}> {Math.round((tk / win) * 100)}%</Text> : null}
         </Text>,
       )
     }
     if (big) {
+      // El círculo se vacía con la vida de la caché (● ◕ ◑ ◔ ○); en el último minuto, pastilla con segundos.
       const cache = busy
         ? { dot: '●', color: 'cyan', text: 'caché en uso' }
         : status.kind === 'warm'
-          ? { dot: '●', color: status.leftMs < 5 * 60_000 ? 'yellow' : 'green', text: `caché vence en ${formatShort(status.leftMs)}` }
+          ? { dot: cacheGlyph(status.leftMs, ttl), color: level === 'calm' ? 'green' : 'yellow', text: `caché vence en ${formatShort(status.leftMs)}` }
           : status.kind === 'cold'
-            ? { dot: '○', color: 'yellow', text: status.coldMs > KEEP_MS ? 'caché fría' : `caché fría hace ${formatShort(status.coldMs)}` }
+            ? { dot: '○', color: 'red', text: status.coldMs > KEEP_MS ? 'caché fría' : `caché fría hace ${formatShort(status.coldMs)}` }
             : null
-      if (cache) {
+      if (isLast && status.kind === 'warm') {
         info.push(
-          <Text key="cache" color={cache.color}>
+          <Text key="cache" backgroundColor="yellow" color="black" bold>
+            {` VENCE EN ${formatSeconds(status.leftMs)} `}
+          </Text>,
+        )
+      } else if (cache) {
+        info.push(
+          <Text key="cache" color={cache.color} bold={isCold}>
             {cache.dot} {cache.text}
           </Text>,
         )
@@ -936,15 +967,15 @@ export const register: Register = (on, options) => {
     } else if (saved && big) {
       info.push(
         <Text key="ho">
-          <Text color="green">✓</Text>
+          <Text color={isCold ? undefined : 'green'} dimColor={isCold}>✓</Text>
           <Text dimColor> handoff {savedAt}</Text>
-          {behind > 0 ? <Text color="yellow"> +{behind}</Text> : null}
+          {behind > 0 ? <Text color={isCold ? undefined : 'yellow'} dimColor={isCold}> +{behind}</Text> : null}
         </Text>,
       )
     }
     if (hint && hint.kind !== 'heavy') {
       info.push(
-        <Text key="hint" color="yellow">
+        <Text key="hint" color={isCold ? undefined : 'yellow'} dimColor={isCold}>
           {hint.text}
         </Text>,
       )
@@ -963,6 +994,7 @@ export const register: Register = (on, options) => {
               key="handoff"
               label={saved ? 'Actualizar handoff' : 'Handoff ahora'}
               hotkey="h"
+              variant={isLast ? 'primary' : undefined}
               onPress={() => void writeOrWarn($)}
             />,
           )
@@ -972,11 +1004,25 @@ export const register: Register = (on, options) => {
       const showClean = status.kind === 'warm' ? showResumeWarm(hint, Boolean(saved), behind) : status.kind === 'cold' && Boolean(saved)
       if (showClean) {
         buttons.push(
-          <Button key="clean" label="Retomar limpio" hotkey="r" onPress={() => void resumeOrWarn($, saved)} />,
+          <Button
+            key="clean"
+            label="Retomar limpio"
+            hotkey="r"
+            variant={isCold ? 'primary' : undefined}
+            onPress={() => void resumeOrWarn($, saved)}
+          />,
         )
       }
       if (status.kind === 'cold') {
-        buttons.push(<Button key="compact" label="Compactar" hotkey="c" onPress={() => void $.session.compact()} />)
+        buttons.push(
+          <Button
+            key="compact"
+            label="Compactar"
+            hotkey="c"
+            variant={showClean ? undefined : 'primary'}
+            onPress={() => void $.session.compact()}
+          />,
+        )
       }
     }
 
@@ -1003,10 +1049,21 @@ export const register: Register = (on, options) => {
 
     if (quotaRows.length === 0 && info.length === 0 && buttons.length === 0) return next(e)
 
+    // Caché fría con contexto grande: una línea propia que dice el costo. Llega casi siempre mientras no
+    // estás, así que la línea extra no mueve nada que estés leyendo.
+    const banner = isCold ? (
+      <Box key="banner">
+        <Text backgroundColor="red" color="black" bold wrap="truncate-end">
+          {` ▲ Tu próximo mensaje reescribe ${formatTokens(tk)} tokens de contexto a precio completo `}
+        </Text>
+      </Box>
+    ) : null
+
     // Una línea en blanco arriba separa la franja del transcript (respuestas, avisos del motor).
     return (
       <Box flexDirection="column" marginTop={1}>
         {quotaRows}
+        {banner}
         {info.length > 0 || buttons.length > 0 ? (
           <Box key="session" justifyContent="space-between" columnGap={2}>
             <Box flexShrink={1}>

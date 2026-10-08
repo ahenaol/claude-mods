@@ -1,96 +1,131 @@
 # cache-guardian
 
-Mod para Claude Code (CLI) que pone una franja encima del prompt con el modelo y el esfuerzo, el consumo de cuota (ventana de 5 horas y semanal) con su proyección al renovar, y el estado de la caché de prompts cuando el contexto es grande. Además escribe un resumen de la conversación (handoff) antes de que la caché venza y frena el regreso cuando retomar sería caro.
+[![Versión](https://img.shields.io/badge/versi%C3%B3n-3.4.0-6a4fd8.svg)](CHANGELOG.md)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.289-d97757.svg)](https://claude.com/claude-code)
+[![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../LICENSE)
+
+**Cuida tu cuota y tu caché de prompts en Claude Code.** El mod agrega encima del prompt una franja con tres cosas: tu consumo de cuota frente al ritmo ideal, el estado de la caché y una alerta que escala a medida que se acerca su vencimiento. También deja escrito un resumen de la conversación antes de que la caché venza, para que retomar no cueste re-leer todo el contexto.
 
 ```text
 5h ━━━●────── 28% → 82% · ↻ 3h 22m  │  sem ─●──────── 4% → 22% · ↻ 5d 17h
-opus-5-5 · medium  │  118k/1M 12%  │  ● caché vence en 59m  │  ✓ handoff 12:53 +6      [ Actualizar handoff ]
+opus-5-5 · medium  │  118k/1M 12%  │  ◕ caché vence en 42m  │  ✓ handoff 12:53 +6      [ Actualizar handoff ]
 ```
+
+## Contenido
+
+- [Por qué existe](#por-qué-existe)
+- [Funciones](#funciones)
+- [Instalación](#instalación)
+- [Cómo leer la franja](#cómo-leer-la-franja)
+- [Alertas de caché](#alertas-de-caché)
+- [Botones y comandos](#botones-y-comandos)
+- [El handoff](#el-handoff)
+- [Configuración](#configuración)
+- [Solución de problemas](#solución-de-problemas)
+- [Desarrollo](#desarrollo)
+- [Licencia](#licencia)
+
+## Por qué existe
+
+Claude Code guarda la conversación en una caché de prompts durante un tiempo (TTL) de 1 hora o de 5 minutos. Mientras la caché está tibia, cada turno re-lee el contexto a una fracción del precio. Cuando vence, el siguiente mensaje vuelve a escribir **todo** el contexto en la caché, y eso es lo más caro.
+
+| Situación | Lo que pagas en el siguiente mensaje |
+| --- | --- |
+| Caché tibia | Lectura de caché (barata) de todo el contexto |
+| Caché fría, sin hacer nada | Reescritura de caché (cara) de todo el contexto |
+| Caché fría y **Retomar limpio** | Reescritura de solo el handoff, unos pocos miles de tokens |
+
+La clave es escribir el handoff **mientras la caché sigue tibia**, no después. El mod lo hace por ti.
+
+## Funciones
 
 | Función | Qué resuelve |
 | --- | --- |
-| Cuota con proyección | Ver de un vistazo con qué % llegarías a la renovación, en el límite de 5 h y en el semanal |
-| Modelo y esfuerzo | Saber con qué modelo y nivel de esfuerzo gastas la cuota |
-| Reloj de caché | Saber si la caché está tibia o fría, cuánto falta para que venza y cuántos tokens pesa la conversación |
-| Handoff | Dejar escrito un resumen mientras releer el contexto todavía es barato |
-| Guardián del regreso | Si vuelves con la caché fría y un contexto grande, retiene tu mensaje y te deja elegir cómo continuar |
+| Cuota con proyección | Con qué % llegarías a la renovación, tanto en la ventana de 5 h como en la semanal |
+| Modelo y esfuerzo | Con qué modelo y nivel de esfuerzo estás gastando la cuota |
+| Reloj de caché | Si la caché está tibia o fría, cuánto le queda y cuánto pesa la conversación |
+| Alertas que escalan | Avisos que suben de intensidad solo cuando hay costo real |
+| Handoff | Un resumen escrito mientras releer el contexto todavía es barato |
+| Guardián del regreso | Si vuelves con la caché fría y un contexto grande, retiene tu mensaje y te deja elegir cómo seguir |
 
-La interfaz del mod está en español.
-
-## Instalar
+## Instalación
 
 ```text
 /plugin install cache-guardian --marketplace ahenaol/claude-mods
 ```
 
-Responde `y` para agregar el marketplace y elige el alcance de usuario para tenerlo en todas las sesiones. La franja aparece después de la primera respuesta; al escribir `/` deben aparecer `/guardian`, `/handoff` y `/retomar`.
+Acepta agregar el marketplace (`y`) y elige el alcance **usuario**. La franja aparece después de la primera respuesta, y al escribir `/` deben aparecer `/guardian`, `/handoff` y `/retomar`.
 
-Requiere Claude Code CLI 2.1.289 o superior. La línea de cuota solo sale con una suscripción: con API key `rateLimits` viene vacío y solo se ve el modelo.
-
-## Por qué existe
-
-Claude Code guarda la conversación en una caché de prompts durante un tiempo (TTL), de 1 hora o de 5 minutos. Mientras la caché está tibia, cada turno relee el contexto a una fracción del precio. Cuando vence, el siguiente mensaje vuelve a escribir **todo** el contexto en la caché, y eso es lo más caro.
-
-| Situación | Qué pagas en el siguiente mensaje |
+| Requisito | Detalle |
 | --- | --- |
-| Caché tibia | Lectura de caché (barata) de todo el contexto |
-| Caché fría, sin hacer nada | Reescritura de caché (cara) de todo el contexto |
-| Caché fría + **Retomar limpio** | Reescritura de solo el handoff (unos pocos miles de tokens) |
+| Claude Code | CLI 2.1.289 o superior, en la terminal |
+| Suscripción | La línea de cuota necesita una suscripción. Con API key no llega el dato de cuota y solo se muestra el modelo |
 
-El truco es escribir el handoff **mientras la caché sigue tibia**, no después.
+Para actualizar: `claude plugin marketplace update ahenaol-mods`, luego `claude plugin update cache-guardian@ahenaol-mods` y `/reload-plugins`.
 
 ## Cómo leer la franja
 
-La franja tiene dos zonas fijas: arriba la cuota (es de la cuenta y cambia despacio) y abajo la sesión (lo que decides antes de escribir).
+La franja tiene dos zonas fijas. Arriba va la cuota, que es de la cuenta y cambia despacio. Abajo va la sesión, con lo que decides antes de escribir.
 
 ### Cuota
 
 | Elemento | Significado |
 | --- | --- |
-| Barra `━` y `─` | `━` es lo consumido, en el color del ritmo; `─` lo que falta |
-| Punto `●` | Dónde deberías ir para llegar a la renovación justo en 100 % |
+| `━` y `─` | `━` es lo consumido, en el color del ritmo; `─` es lo que falta |
+| `●` | Dónde deberías ir para llegar a la renovación justo en 100 % |
 | `28%` | Consumo real de la ventana |
 | `→ 82%` | Proyección: con qué % llegarías al reinicio si sigues a este ritmo |
-| `↻ 3h 22m` | Tiempo para que la ventana se reinicie |
-| `~19%` | Llevas más de 15 min sin respuestas: el dato es el de la última y puede estar por debajo del real |
+| `↻ 3h 22m` | Tiempo que falta para que la ventana se reinicie |
+| `~19%` | Llevas más de 15 minutos sin respuestas: el dato es de la última y puede quedarse corto |
 | `5h renovada` | La ventana se reinició durante la pausa |
 
-El color sigue la proyección: verde por debajo de 90 % (`quotaWarn`), amarillo de 90 a 100 % y rojo por encima de 100 %, que significa que a este ritmo te quedas sin cuota antes de renovar.
+El color sigue la proyección: verde por debajo del 90 % (opción `quotaWarn`), amarillo entre 90 y 100 % y rojo por encima de 100 %. En rojo, a este ritmo te quedas sin cuota antes de que la ventana se renueve.
 
 ```text
 ideal      = 100 × (1 − tiempo_que_falta / duración_de_la_ventana)
 proyección = real / ideal × 100
 ```
 
-El ideal semanal es 24/7, así que la proyección de la semana sale baja después de las noches y los fines de semana. La proyección supone ritmo constante: una ráfaga al inicio de la ventana la dispara.
+El ideal semanal corre 24/7, así que la proyección de la semana sale baja después de las noches y los fines de semana. La proyección supone un ritmo constante: una ráfaga al inicio de la ventana la dispara.
 
 ### Sesión
 
-El modelo y el contexto se ven siempre; la caché, el handoff y los botones aparecen cuando el contexto pasa de 40k tokens (`minTokens`).
+El modelo y el contexto se ven siempre. La caché, el handoff y los botones aparecen cuando el contexto pasa de 40k tokens (opción `minTokens`).
 
-| Lo que ves | Significado |
+| Elemento | Significado |
 | --- | --- |
-| `opus-5-5 · medium` | Modelo y esfuerzo. El esfuerzo sale en amarillo con `xhigh` o `max` |
-| `221k/1M 22%` | Contexto frente a la ventana del modelo. Amarillo desde 100k (`softTokens`), rojo desde el 70 % de la ventana (`fullPercent`) |
-| `● caché vence en 42m` | Caché vigente; el contador se reinicia con cada turno. El punto se pone amarillo a menos de 5 min |
-| `● caché en uso` | Claude está respondiendo |
-| `○ caché fría hace 2h 00m` | Venció: tu próximo mensaje reescribe todo el contexto |
-| `✓ handoff 12:53 +14` | Hay un handoff, con su hora; `+14` son los turnos que no incluye |
-| `◆ handoff de esta carpeta, de hace 3h 00m` | Conversación nueva con un handoff pendiente de esa carpeta |
+| `opus-5-5 · medium` | Modelo y esfuerzo. El esfuerzo sale en amarillo con `xhigh` o `max`, que gastan más cuota por turno |
+| `221k/1M 22%` | Contexto frente a la ventana del modelo. Amarillo desde 100k (`softTokens`) y rojo desde el 70 % de la ventana (`fullPercent`) |
+| `◕ caché vence en 42m` | Estado de la caché (ver [Alertas de caché](#alertas-de-caché)) |
+| `✓ handoff 12:53 +6` | Hora del handoff guardado; `+6` son los turnos que todavía no incluye |
+| `◆ handoff de esta carpeta, de hace 3h` | Conversación nueva con un handoff pendiente de esa carpeta |
 
-Además sale un solo aviso de cierre de tarea, el primero que aplique: `compacta o retoma limpio` (ventana al 70 %), `¿tarea nueva? (commit hecho)` (Claude hizo un `git commit` con contexto grande) o `sesión larga (30 turnos)` (`longTurns`).
+Además se muestra un solo aviso de cierre de tarea, el primero que aplique: `compacta o retoma limpio` (ventana al 70 %), `¿tarea nueva? (commit hecho)` o `sesión larga (30 turnos)`.
+
+## Alertas de caché
+
+La alerta sube de intensidad con la urgencia, y solo cuando el contexto supera `minTokens`. Con poco contexto, una caché fría cuesta poco y el mod no te interrumpe.
+
+| Nivel | Cómo se ve | Cuándo |
+| --- | --- | --- |
+| Tibia | `● ◕ ◑ ◔ caché vence en 42m` en verde | El círculo se vacía con la vida de la caché |
+| Por vencer | `◔ caché vence en 4m` en amarillo | Últimos 5 minutos (75 s con TTL de 5 min) |
+| Último minuto | Pastilla amarilla `VENCE EN 0:48`, con **Actualizar handoff** destacado | Último minuto (37 s con TTL de 5 min) |
+| Fría | Línea roja `▲ Tu próximo mensaje reescribe 221k tokens de contexto a precio completo`, el resto de la sesión atenuado y **Retomar limpio** destacado | La caché ya venció |
+
+Cada color tiene un solo significado en toda la franja: el amarillo es "atención" y el rojo es "esto te cuesta cuota ahora", igual que en la cuota y en el contexto.
 
 ## Botones y comandos
 
 | Botón | Tecla | Qué hace |
 | --- | --- | --- |
-| **Handoff ahora** / **Actualizar handoff** | `h` | Escribe ya el handoff |
+| **Handoff ahora** / **Actualizar handoff** | `h` | Escribe el handoff en este momento |
 | **Retomar limpio** | `r` | Actualiza el handoff si hace falta, hace `/clear` y lo adjunta a tu próximo mensaje |
-| **Compactar** | `c` | Compacta la conversación (caché fría) |
+| **Compactar** | `c` | Compacta la conversación (con la caché fría) |
 | **Continuar desde ahí** | `r` | Adjunta el handoff pendiente a tu próximo mensaje |
 | **Descartar** | `x` | Olvida el handoff pendiente |
 
-Se pulsan con clic, o pasando el foco a la franja con `ctrl+x tab`, la tecla y `Esc` para volver al prompt.
+Se pulsan con clic, o pasando el foco a la franja con `ctrl+x tab`, presionando la tecla y volviendo al prompt con `Esc`.
 
 | Comando | Qué hace |
 | --- | --- |
@@ -98,76 +133,92 @@ Se pulsan con clic, o pasando el foco a la franja con `ctrl+x tab`, la tecla y `
 | `/handoff` | Escribe el handoff ahora y lo muestra en el chat |
 | `/retomar` | Actualiza el handoff si hace falta, limpia la conversación y lo deja listo para tu próximo mensaje |
 
-`/clear` escrito a mano, con más de 40k tokens, actualiza antes el handoff y después lo deja ofrecido.
+Un `/clear` escrito a mano, con más de 40k tokens, actualiza el handoff antes de limpiar y después lo deja ofrecido.
 
 ## El handoff
 
-Es una consulta aparte sobre la conversación que se sirve de la caché tibia (sale a precio de lectura) y no aparece en el chat. Pide un resumen de unas 400 palabras con Objetivo, Estado actual, Decisiones tomadas, Archivos y comandos clave, Siguiente paso, y Pendientes. Se guarda en el almacén del mod y, como respaldo legible, en `~/.claude/handoffs/<carpeta-con-guiones>.md`. Se ofrece durante 7 días y se usa una sola vez.
+El handoff se genera con una consulta aparte sobre la conversación. Esa consulta aprovecha la caché tibia (sale a precio de lectura) y no aparece en el chat. El resultado es un resumen de unas 400 palabras con Objetivo, Estado actual, Decisiones tomadas, Archivos y comandos clave, Siguiente paso, y Pendientes. Se guarda en el almacén del mod y, como respaldo legible, en `~/.claude/handoffs/<carpeta-con-guiones>.md`. Se ofrece durante 7 días y se usa una sola vez.
 
-**Automático.** Si te alejas, el mod lo escribe solo unos 5 minutos antes de que venza la caché, siempre que haya turnos nuevos y el contexto pase de 40k tokens. El temporizador vive dentro de Claude Code: si cierras la terminal, no hay handoff automático.
+**Automático.** Si te alejas, el mod escribe el handoff unos 5 minutos antes de que venza la caché, siempre que haya turnos nuevos y el contexto supere `minTokens`. El temporizador corre dentro de Claude Code: si cierras la terminal, no hay handoff automático.
 
-**Guardián del regreso.** Si vuelves con la caché fría y más de 40k tokens, al pulsar Enter el mod retiene tu mensaje y abre un panel:
+**Guardián del regreso.** Si vuelves con la caché fría y un contexto grande, al pulsar Enter el mod retiene tu mensaje y te ofrece cuatro opciones:
 
 | Opción | Cuándo usarla |
 | --- | --- |
 | **1 Retomar limpio** | Casi siempre: `/clear`, adjunta el handoff y envía tu mensaje |
-| **2 Compactar y enviar** | No hay handoff o necesitas más detalle |
+| **2 Compactar y enviar** | No hay handoff o necesitas más detalle del que cabe en él |
 | **3 Enviar igual** | Necesitas el contexto completo tal cual; pagas la reescritura |
-| **4 Cancelar / Esc** | Tu mensaje vuelve al prompt intacto |
+| **4 Cancelar / Esc** | Tu mensaje vuelve intacto al prompt |
 
-El guardián no actúa con mensajes que empiezan por `/` o `!`, con adjuntos ni con mensajes que no escribiste en el prompt. Al reanudar con `--resume`, `--continue` o `/resume`, el mod recupera el estado de esa conversación y avisa si la caché está fría.
+El guardián no actúa con mensajes que empiezan por `/` o `!`, con adjuntos ni con mensajes que no escribiste en el prompt. Al reanudar con `--resume`, `--continue` o `/resume`, el mod recupera el estado de esa conversación.
 
 ## Configuración
 
-Desde `/config` (filas del mod) o en `~/.claude/settings.json` bajo `pluginConfigs`.
+Las opciones se cambian desde `/config` o en `~/.claude/settings.json`, bajo `pluginConfigs["cache-guardian@ahenaol-mods"]`.
 
 | Opción | Por defecto | Qué controla |
 | --- | --- | --- |
-| `ttl` | `auto` | TTL de la caché. `auto` lo aprende de tus pausas (asume 1 h mientras tanto); `1h` o `5m` lo fijan. Con API key, probablemente `5m` |
-| `minTokens` | 40000 | Por debajo no hay handoff automático, guardián ni botones |
+| `ttl` | `auto` | TTL de la caché. `auto` lo aprende de tus pausas (asume 1 h mientras tanto); `1h` o `5m` lo fijan. Con API key, probablemente sea `5m` |
+| `minTokens` | 40000 | Por debajo no hay alertas de caché, handoff automático, guardián ni botones |
 | `softTokens` | 100000 | Desde aquí la franja marca contexto pesado y sale el primer aviso |
-| `hardTokens` | 150000 | Segundo aviso |
+| `hardTokens` | 150000 | Segundo aviso de contexto |
 | `autoHandoff` | `true` | Escribir el handoff solo, antes de que venza la caché |
 | `showQuota` | `true` | Mostrar la cuota |
-| `showModel` | `true` | Mostrar modelo y esfuerzo |
-| `quotaWarn` | 90 | % proyectado desde el que la barra pasa a amarillo |
+| `showModel` | `true` | Mostrar el modelo y el esfuerzo |
+| `quotaWarn` | 90 | % proyectado desde el que la barra de cuota pasa a amarillo |
 | `fullPercent` | 70 | % de la ventana desde el que se sugiere compactar o retomar limpio |
-| `longTurns` | 30 | Turnos sin handoff nuevo desde los que se avisa de sesión larga |
+| `longTurns` | 30 | Turnos sin un handoff nuevo desde los que se avisa de sesión larga |
+
+## Privacidad
+
+El mod no hace llamadas de red propias ni envía datos a terceros. La cuota sale de los datos que Claude Code ya recibe en cada turno. El handoff se genera con tu misma sesión y se guarda solo en tu equipo.
 
 ## Solución de problemas
 
 | Síntoma | Causa probable y solución |
 | --- | --- |
-| No veo la franja | Aparece tras la primera respuesta. Si no, busca en el chat una línea tenue `cache-guardian:` con el motivo, o abre `claude --debug` |
-| No aparece la cuota | Sin suscripción, antes de la primera respuesta, o `showQuota` en `false` |
-| Dice "tibia" pero la caché estaba fría | Tu TTL es de 5 min: fija `ttl` en `5m` |
-| La tecla `h` no hace nada | La franja no tiene el foco: clic o `ctrl+x tab` primero |
+| No veo la franja | Aparece después de la primera respuesta. Revisa `claude plugin list` y busca en el chat una línea tenue `cache-guardian:` con el motivo |
+| No aparece la cuota | Sin suscripción, antes de la primera respuesta, o con `showQuota` en `false` |
+| Dice "tibia" pero la caché estaba fría | Tu TTL es de 5 minutos y el mod todavía no lo aprendió: fija `ttl` en `5m` |
+| La tecla `h` no hace nada | La franja no tiene el foco: haz clic en ella o usa `ctrl+x tab` primero |
 | **Retomar limpio** deja el mensaje en el prompt | El motor no permitió reenviarlo: pulsa Enter y el handoff sale con él |
-| Tras actualizar Claude Code el mod falla | La API de mods está en *early access*: actualiza el mod o abre un issue |
+| El mod falla tras actualizar Claude Code | La API de mods está en *early access*: actualiza el mod o abre un issue |
+
+Para un diagnóstico detallado: `claude --debug`.
 
 ## Desarrollo
 
 ```text
 cache-guardian/
-├── .claude-plugin/plugin.json   ← manifiesto y opciones
+├── .claude-plugin/plugin.json   manifiesto y opciones
 ├── hooks/
-│   ├── hooks.json               ← apunta al módulo
-│   ├── register.tsx             ← hooks y franja
-│   └── logic.ts                 ← lógica pura (ideal, ritmo, barra, TTL, formatos)
-├── types/index.d.ts             ← contrato del estado del mod
-└── tests/                       ← 37 pruebas (lógica, franja y handoff sobre una sesión simulada)
+│   ├── hooks.json               apunta al módulo
+│   ├── register.tsx             hooks y franja
+│   └── logic.ts                 lógica pura: ideal, ritmo, barra, TTL, niveles de alerta, formatos
+├── types/index.d.ts             contrato del estado del mod
+├── tests/                       pruebas de la lógica, la franja y el handoff sobre una sesión simulada
+├── CHANGELOG.md
+└── README.md
 ```
 
 ```bash
-claude --plugin-dir ./mods/cache-guardian      # una sesión con el mod desde la carpeta
+claude --plugin-dir ./mods/cache-guardian      # una sesión con el mod cargado desde la carpeta
 claude plugin validate ./mods/cache-guardian
-claude plugin test ./mods/cache-guardian       # en una terminal normal, no dentro de Claude Code
+claude plugin test ./mods/cache-guardian       # en una terminal normal, no dentro de una sesión de Claude Code
 ```
+
+Si tienes instalada la versión del marketplace, deshabilítala mientras pruebas (`claude plugin disable cache-guardian@ahenaol-mods`) para que no carguen las dos.
+
+Los cambios de cada versión están en el [CHANGELOG](CHANGELOG.md).
 
 ## Desinstalar
 
 ```bash
-claude plugin uninstall cache-guardian
+claude plugin uninstall cache-guardian@ahenaol-mods
 ```
 
 Si quieres, borra también los respaldos de handoff en `~/.claude/handoffs/`.
+
+## Licencia
+
+Distribuido bajo la licencia [MIT](../../LICENSE).

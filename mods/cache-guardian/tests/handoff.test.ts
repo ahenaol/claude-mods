@@ -347,3 +347,37 @@ test('un turno fallido sin respuesta no da la caché por renovada', async ($, on
   await ui.unmount()
   expect((f.store.get('cg.last.s1') as any).n).toBe(5)
 })
+
+// Último minuto: la caché sale como pastilla con segundos y el handoff atrasado es la acción principal.
+test('en el último minuto la franja muestra la cuenta regresiva y destaca el handoff', async ($, on) => {
+  const { f } = fakeSession(on, {
+    'cg.last.s1': { at: NOW - HOUR + 48_000, tokens: 300_000, n: 6 },
+    'cg.ho.s1': { text: 'mío', at: NOW - 2 * HOUR, turns: 4, cwd: CWD, sessionId: 's1', isConsumed: false },
+  })
+  f.turns = 6
+  f.messages = history()
+  f.tokens = 300_000
+  await start($)
+  const ui = await mountBand($)
+  expect(await ui.find({ type: 'Text', text: /VENCE EN 0:48/ })).toBeDefined()
+  expect((await ui.find({ key: 'handoff' }))?.props.variant).toBe('primary')
+  expect(await ui.find({ type: 'Text', text: /reescribe/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+// Caché fría con contexto grande: línea propia con el costo y Retomar limpio como acción principal.
+test('con la caché fría la franja dice el costo y destaca retomar limpio', async ($, on) => {
+  const { f } = fakeSession(on, {
+    'cg.last.s1': { at: NOW - 2 * HOUR, tokens: 300_000, n: 6 },
+    'cg.ho.s1': { text: 'mío', at: NOW - 2 * HOUR, turns: 6, cwd: CWD, sessionId: 's1', isConsumed: false },
+  })
+  f.turns = 6
+  f.messages = history()
+  f.tokens = 300_000
+  await start($)
+  const ui = await mountBand($)
+  expect(await ui.find({ type: 'Text', text: /reescribe 300k tokens/ })).toBeDefined()
+  expect((await ui.find({ key: 'clean' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ key: 'compact' }))?.props.variant).toBeUndefined()
+  await ui.unmount()
+})

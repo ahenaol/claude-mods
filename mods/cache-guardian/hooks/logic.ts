@@ -46,6 +46,32 @@ export const cacheStatus = (lastEnd: number | null, ttl: Ttl, now: number): Cach
   return left > 0 ? { kind: 'warm', leftMs: left } : { kind: 'cold', coldMs: -left }
 }
 
+// Urgencia de la caché tibia, para escalar la alerta solo cuando importa. Los umbrales se acotan
+// al TTL para que con 5 min no esté siempre "por vencer": 1 h → 5 min y 1 min; 5 min → 75 s y 37 s.
+export type CacheLevel = 'calm' | 'soon' | 'last'
+
+export const cacheLevel = (leftMs: number, ttl: Ttl): CacheLevel => {
+  const total = ttlMs(ttl)
+  if (leftMs <= Math.min(MINUTE, total / 8)) return 'last'
+  if (leftMs <= Math.min(5 * MINUTE, total / 4)) return 'soon'
+
+  return 'calm'
+}
+
+// Reloj que se vacía con la vida de la caché: ● ◕ ◑ ◔ (y ○ cuando ya está fría).
+export const cacheGlyph = (leftMs: number, ttl: Ttl): string => {
+  const f = leftMs / ttlMs(ttl)
+
+  return f > 0.75 ? '●' : f > 0.5 ? '◕' : f > 0.25 ? '◑' : '◔'
+}
+
+// Cuenta regresiva del último minuto: "0:48".
+export const formatSeconds = (ms: number): string => {
+  const s = Math.max(0, Math.ceil(ms / 1000))
+
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 // % entero con ancho fijo ("  3", " 18", "100") para que las columnas de la franja queden alineadas.
 export const padPercent = (n: number): string => String(Math.round(n)).padStart(3)
 
@@ -300,8 +326,9 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     'Sesión:  opus-5-5 · medium  │  118k/1M 12%  │  ● caché vence en 59m  │  ✓ handoff 12:53 +3',
     '  Modelo y esfuerzo: xhigh y max en amarillo (gastan más cuota por turno).',
     `  Contexto: amarillo desde ${formatTokens(c.softTokens)} (cada turno lo relee), rojo desde el ${c.fullPercent} % de la ventana.`,
-    `  Caché (desde ${formatTokens(c.minTokens)}): ● vence en 59m (tibia) · ○ fría hace 12m (vencida) · ● cian, respondiendo.`,
-    '    Fría: tu próximo mensaje reescribe todo el contexto a precio completo.',
+    `  Caché (desde ${formatTokens(c.minTokens)}): el círculo se vacía con su vida (● ◕ ◑ ◔) · ● cian, respondiendo.`,
+    '    Amarillo en los últimos 5 min · pastilla "VENCE EN 0:48" en el último minuto, con la acción principal destacada.',
+    '    Fría (○): una línea roja dice cuánto reescribe tu próximo mensaje, y el resto de la sesión se atenúa.',
     '  Handoff: hora del resumen guardado (con la fecha si no es de hoy); +3 son los turnos que no incluye.',
     `  Avisos en amarillo: compacta o retoma limpio (${c.fullPercent} %) · ¿tarea nueva? (tras un commit) · sesión larga.`,
     '',

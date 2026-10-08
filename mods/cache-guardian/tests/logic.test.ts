@@ -1,7 +1,10 @@
 import { expect, test } from 'claude-code/testing'
 
 import {
+  cacheGlyph,
+  cacheLevel,
   cacheStatus,
+  formatSeconds,
   contextHint,
   effectiveTtl,
   effortAfterCommand,
@@ -188,4 +191,19 @@ test('handoff: hora con fecha si no es de hoy, atraso y comandos frente a mensaj
   expect(isCommandText('hola /model')).toBe(false)
   expect(hasHistory([{ role: 'user' }])).toBe(false)
   expect(hasHistory([{ role: 'user' }, { role: 'assistant' }])).toBe(true)
+})
+
+// La alerta escala con la urgencia; con TTL de 5 min los umbrales se acotan para no vivir en amarillo.
+test('nivel de la caché, reloj que se vacía y cuenta regresiva', () => {
+  const MIN = 60_000
+  expect(cacheLevel(42 * MIN, '1h')).toBe('calm')
+  expect(cacheLevel(5 * MIN, '1h')).toBe('soon')
+  expect(cacheLevel(60_000, '1h')).toBe('last')
+  expect(cacheLevel(3 * MIN, '5m')).toBe('calm')
+  expect(cacheLevel(70_000, '5m')).toBe('soon')
+  expect(cacheLevel(30_000, '5m')).toBe('last')
+  expect([55, 40, 20, 5].map(m => cacheGlyph(m * MIN, '1h')).join('')).toBe('●◕◑◔')
+  expect(formatSeconds(48_000)).toBe('0:48')
+  expect(formatSeconds(60_000)).toBe('1:00')
+  expect(formatSeconds(-5)).toBe('0:00')
 })
