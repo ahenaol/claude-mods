@@ -12,7 +12,7 @@ Este repositorio es a la vez el código fuente y un marketplace de Claude Code. 
 
 | Mod | Descripción | Versión |
 | --- | --- | --- |
-| [**cache-guardian**](mods/cache-guardian/) | Cuota de 5 h y semanal frente al ritmo ideal, reloj de la caché de prompts con alertas que escalan y un handoff preventivo para no re-cachear contextos grandes | 3.5.0 |
+| [**cache-guardian**](mods/cache-guardian/) | Cuota de 5 h y semanal frente al ritmo ideal, reloj de la caché de prompts con alertas que escalan y un handoff preventivo para no re-cachear contextos grandes | 3.6.0 |
 
 ## Instalación
 

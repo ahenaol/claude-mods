@@ -7,7 +7,7 @@
 **Cuida tu cuota y tu caché de prompts en Claude Code.** El mod agrega encima del prompt una franja con tres cosas: tu consumo de cuota frente al ritmo ideal, el estado de la caché y una alerta que escala a medida que se acerca su vencimiento. También deja escrito un resumen de la conversación antes de que la caché venza, para que retomar no cueste re-leer todo el contexto.
 
 ```text
-5h ━━━●────── 28% → 82% · ↻ 3h 22m  │  sem ─●──────── 4% → 22% · ↻ 5d 17h
+5h ━━━●─────── 28% → 82% · ↻ 3h 22m  │  sem ●━━──────── 4% → 22% · ↻ 5d 17h
 opus-5-5 · medium  │  118k/1M 12%  │  ◕ caché vence en 42m  │  ✔︎ handoff 12:53 +6      [ Actualizar handoff ]
 ```
 
@@ -72,8 +72,8 @@ La franja tiene dos zonas fijas. Arriba va la cuota, que es de la cuenta y cambi
 
 | Elemento | Significado |
 | --- | --- |
-| `━` y `─` | `━` es lo consumido, en el color del ritmo; `─` es lo que falta |
-| `●` | Dónde deberías ir para llegar a la renovación justo en 100 % |
+| `●` | Dónde vas: tu consumo real, en el color del ritmo. Dentro de la barra vas por debajo del ritmo ideal; más allá de su final, por encima |
+| `━` y `─` | `━` es el tiempo transcurrido de la ventana, en neutro: dónde deberías ir para llegar a la renovación justo en 100 %; `─` es lo que falta |
 | `28%` | Consumo real de la ventana |
 | `→ 82%` | Proyección: con qué % llegarías al reinicio si sigues a este ritmo |
 | `↻ 3h 22m` | Tiempo que falta para que la ventana se reinicie |

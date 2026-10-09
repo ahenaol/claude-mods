@@ -109,16 +109,18 @@ export const PACE_COLOR: Record<Pace, string> = {
   excede: 'red',
 }
 
-// Barra de `width` celdas: `━` hasta el % real y `─` el resto, con un punto `●` en el ideal,
-// como el hito de una línea de tiempo.
-// El punto va *entre* celdas (la barra mide `width + 1`): si tapara una celda, un exceso menor
-// a una celda (p. ej. 30 % real contra 24 % ideal en 10 celdas) quedaría oculto bajo la marca.
+// Barra de `width` celdas: `━` hasta el % ideal (el tiempo transcurrido de la ventana) y `─`
+// el resto, con un punto `●` en el % real: la barra es el reloj y el punto eres tú.
+// Va al revés de lo habitual a propósito: el punto aislado es lo primero que mira el ojo, así que
+// lleva el dato que importa (el consumo) y la referencia queda en la barra, neutra.
+// El punto va *entre* celdas (la barra mide `width + 1`): si tapara una celda, una diferencia menor
+// a una celda (p. ej. 30 % real contra 24 % ideal en 10 celdas) quedaría oculta bajo la marca.
 // Sin trazo vertical: en la terminal `│`, `┼` y `╋` ocupan todo el alto de la línea y se
 // confunden con el `│` que separa las zonas de la franja.
 // Trazos de línea (misma línea base): `█` sale como bloque suelto y `░`/`▓` como trama densa.
 export const quotaBar = (real: number, ideal: number, width = 12): string => {
-  const filled = Math.round((Math.min(100, Math.max(0, real)) / 100) * width)
-  const mark = Math.round((Math.min(100, Math.max(0, ideal)) / 100) * width)
+  const filled = Math.round((Math.min(100, Math.max(0, ideal)) / 100) * width)
+  const mark = Math.round((Math.min(100, Math.max(0, real)) / 100) * width)
   let out = ''
   for (let i = 0; i <= width; i += 1) {
     if (i === mark) out += '●'
@@ -128,8 +130,8 @@ export const quotaBar = (real: number, ideal: number, width = 12): string => {
   return out
 }
 
-// La barra en tramos para colorearlos por separado: consumido en el color del ritmo,
-// restante atenuado y la marca del ideal en neutro, que se lee aunque caiga dentro de lo consumido.
+// La barra en tramos para colorearlos por separado: el tiempo transcurrido en neutro, el
+// restante atenuado y el punto del consumo en el color del ritmo.
 export type BarRun = { kind: 'fill' | 'rest' | 'mark'; text: string }
 
 export const barRuns = (real: number, ideal: number, width = 12): BarRun[] => {
@@ -413,10 +415,10 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     'Dos zonas fijas. Arriba la cuenta (cuota), abajo esta sesión, pegada al prompt y con los botones.',
     '',
     'Cuota:  5h ━━━●────── 28% → 82% · ↻ 3h 22m',
-    '  ━ consumido (color del ritmo) · ─ restante · ● dónde deberías ir para llegar justo a 100 %.',
+    '  ● dónde vas (color del ritmo) · ━ dónde deberías ir para llegar justo a 100 % (tiempo transcurrido) · ─ lo que falta.',
     '  28% usado → 82% proyectado: con cuánto llegarías al reinicio a este ritmo · ↻ cuánto falta para el reinicio.',
     `  Verde: llegas con holgura · amarillo: ${c.quotaWarn} % o más · rojo: te quedarías sin cuota antes de renovar.`,
-    '  Antes de la marca vas por debajo del ritmo ideal; después, por encima.',
+    '  Punto dentro de la barra: vas por debajo del ritmo ideal; más allá de su final, por encima.',
     '  "~28%": más de 15 min sin respuestas, el dato es el de la última. "renovada": la ventana ya se reinició.',
     '',
     `Sesión:  opus-5-5 · medium  │  118k/1M 12%  │  ● caché vence en 59m  │  ${CHECK} handoff 12:53 +3`,

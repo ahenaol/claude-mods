@@ -2,6 +2,12 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.6.0] - 08/10/2026
+
+### Cambiado
+
+- La barra de cuota invierte sus significados: la barra `━` es ahora el tiempo transcurrido de la ventana (el ritmo ideal), en neutro, y el punto `●` es tu consumo real, en el color del ritmo. El punto aislado es lo primero que mira el ojo, así que ahora lleva el dato que importa. Dentro de la barra vas por debajo del ritmo; más allá de su final, por encima.
+
 ## [3.5.0] - 08/10/2026
 
 ### Agregado

@@ -981,7 +981,7 @@ export const register: Register = (on, options) => {
     const isCold = big && !busy && status.kind === 'cold'
     const isLast = big && !busy && level === 'last'
 
-    // Separador de zonas y piezas: `│` atenuado. La marca de la barra es un triángulo para no competir con él.
+    // Separador de zonas y piezas: `│` atenuado. La marca de la barra es un punto para no competir con él.
     const sep = (k: string) => (
       <Text key={k} dimColor>
         {'  │  '}
@@ -1010,12 +1010,11 @@ export const register: Register = (on, options) => {
         <Text key={w.kind}>
           <Text dimColor>{label} </Text>
           {barRuns(v.real, v.ideal, isWide ? 10 : 12).map((run, i) =>
+            // La barra es el tiempo (neutra) y el punto el consumo, en el color del ritmo.
             run.kind === 'fill' ? (
-              <Text key={String(i)} color={tone}>
-                {run.text}
-              </Text>
+              <Text key={String(i)}>{run.text}</Text>
             ) : run.kind === 'mark' ? (
-              <Text key={String(i)} bold>
+              <Text key={String(i)} color={tone} bold>
                 {run.text}
               </Text>
             ) : (

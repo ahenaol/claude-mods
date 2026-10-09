@@ -61,16 +61,18 @@ test('el color sigue la proyección: holgura, cerca del límite o sin cuota', ()
   expect(paceOf(90, null, 80)).toBe('cerca')
 })
 
-test('la barra marca el ideal y rellena hasta el real', () => {
-  const bar = quotaBar(50, 25, 12)
+test('la barra rellena hasta el ideal y el punto marca el real', () => {
+  const bar = quotaBar(25, 50, 12)
   expect(bar.length).toBe(13)
   expect(bar[3]).toBe('●')
   expect(bar.startsWith('━━━')).toBe(true)
   expect(bar.endsWith('─')).toBe(true)
-  // Al 100 % la marca queda al final, después de la última celda.
-  expect(quotaBar(0, 100, 12)[12]).toBe('●')
-  // La marca va entre celdas: un exceso menor a una celda sigue viéndose después del rombo.
-  expect(quotaBar(30, 23.8, 10)).toBe('━━●━───────')
+  // Al 100 % el punto queda al final, después de la última celda.
+  expect(quotaBar(100, 0, 12)[12]).toBe('●')
+  // El punto va entre celdas: una diferencia menor a una celda sigue viéndose.
+  expect(quotaBar(23.8, 30, 10)).toBe('━━●━───────')
+  // Vas adelantado: el punto queda más allá del final de la barra.
+  expect(quotaBar(50, 20, 10)).toBe('━━───●─────')
 })
 
 test('el reloj de caché distingue tibia de fría', () => {
@@ -142,7 +144,7 @@ test('la cuota no muestra datos viejos: ventana renovada y lectura vieja', () =>
 })
 
 test('la barra se parte en tramos y el tiempo corto es compacto', () => {
-  expect(barRuns(50, 25, 12).map(r => r.kind)).toEqual(['fill', 'mark', 'fill', 'rest'])
+  expect(barRuns(25, 50, 12).map(r => r.kind)).toEqual(['fill', 'mark', 'fill', 'rest'])
   expect(barRuns(0, 0, 4)).toEqual([{ kind: 'mark', text: '●' }, { kind: 'rest', text: '────' }])
   expect(formatShort(42 * 60_000)).toBe('42m')
   expect(formatShort(202 * 60_000)).toBe('3h 22m')
