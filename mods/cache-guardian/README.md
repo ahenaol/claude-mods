@@ -77,8 +77,10 @@ La franja tiene dos zonas fijas. Arriba va la cuota, que es de la cuenta y cambi
 | `28%` | Consumo real de la ventana |
 | `→ 82%` | Proyección: con qué % llegarías al reinicio si sigues a este ritmo |
 | `↻ 3h 22m` | Tiempo que falta para que la ventana se reinicie |
-| `~19%` | Llevas más de 15 minutos sin respuestas: el dato es de la última y puede quedarse corto |
+| `~19%` | Ninguna de tus sesiones ha recibido respuestas en más de 15 minutos: el dato es de la última y puede quedarse corto |
 | `5h renovada` | La ventana se reinició durante la pausa |
+
+La cuota solo llega con las respuestas de la API. Como es de la cuenta y no de la conversación, cada sesión comparte la suya con las demás de este equipo: una sesión quieta toma en menos de un minuto lo que midió otra que sí está trabajando, así que todas muestran el mismo dato.
 
 El color sigue la proyección: verde por debajo del 90 % (opción `quotaWarn`), amarillo entre 90 y 100 % y rojo por encima de 100 %. En rojo, a este ritmo te quedas sin cuota antes de que la ventana se renueve.
 
@@ -98,6 +100,7 @@ El modelo y el contexto se ven siempre. La caché, el handoff y los botones apar
 | `opus-5-5 · medium` | Modelo y esfuerzo. El esfuerzo sale en amarillo con `xhigh` o `max`, que gastan más cuota por turno |
 | `221k/1M 22%` | Contexto frente a la ventana del modelo. Amarillo desde 100k (`softTokens`) y rojo desde el 70 % de la ventana (`fullPercent`) |
 | `◕ caché vence en 42m` | Estado de la caché (ver [Alertas de caché](#alertas-de-caché)) |
+| `· renovada por el handoff` | El último uso de la caché fue escribir el handoff, no un turno tuyo: por eso el plazo volvió a empezar |
 | `✔︎ handoff 12:53 +6` | Hora del handoff guardado; `+6` son los turnos que todavía no incluye |
 | `◆ handoff de esta carpeta, de hace 3h` | Conversación nueva con un handoff pendiente de esa carpeta |
 
@@ -156,6 +159,8 @@ Un `/clear` escrito a mano, con más de 40k tokens, actualiza el handoff antes d
 El handoff se genera con una consulta aparte sobre la conversación. Esa consulta aprovecha la caché tibia (sale a precio de lectura) y no aparece en el chat. El resultado es un resumen de unas 400 palabras con Objetivo, Estado actual, Decisiones tomadas, Archivos y comandos clave, Siguiente paso, y Pendientes. Se guarda en el almacén del mod y, como respaldo legible, en `~/.claude/handoffs/<carpeta-con-guiones>.md`. Se ofrece durante 7 días y se usa una sola vez.
 
 **Automático.** Si te alejas, el mod escribe el handoff unos 5 minutos antes de que venza la caché, siempre que haya turnos nuevos y el contexto supere `minTokens`. El temporizador corre dentro de Claude Code: si cierras la terminal, no hay handoff automático.
+
+Escribir el handoff lee la caché, y leerla la renueva: el plazo vuelve a empezar desde ese momento y la franja lo marca con `· renovada por el handoff`. Es un efecto de la API, no una lectura vieja. Si sigues sin escribir, la caché vence una hora después (con TTL de 1 h) y sale la alerta roja; el handoff automático no se repite mientras no haya turnos nuevos.
 
 **Guardián del regreso.** Si vuelves con la caché fría y un contexto grande, al pulsar Enter el mod retiene tu mensaje y te ofrece cuatro opciones:
 

@@ -419,7 +419,7 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     '  28% usado → 82% proyectado: con cuánto llegarías al reinicio a este ritmo · ↻ cuánto falta para el reinicio.',
     `  Verde: llegas con holgura · amarillo: ${c.quotaWarn} % o más · rojo: te quedarías sin cuota antes de renovar.`,
     '  Punto dentro de la barra: vas por debajo del ritmo ideal; más allá de su final, por encima.',
-    '  "~28%": más de 15 min sin respuestas, el dato es el de la última. "renovada": la ventana ya se reinició.',
+    '  "~28%": ninguna sesión tuya tuvo respuestas en 15 min, el dato es el de la última. "renovada": la ventana ya se reinició.',
     '',
     `Sesión:  opus-5-5 · medium  │  118k/1M 12%  │  ● caché vence en 59m  │  ${CHECK} handoff 12:53 +3`,
     '  Modelo y esfuerzo: xhigh y max en amarillo (gastan más cuota por turno).',

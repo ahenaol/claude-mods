@@ -2,6 +2,16 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.7.0] - 16/10/2026
+
+### Cambiado
+
+- La cuota se comparte entre tus sesiones. Solo llega con las respuestas de la API, así que una sesión quieta se quedaba con el % de su última respuesta y mostraba otro número que la sesión activa. Ahora cada sesión publica lo que mide y las demás lo toman en menos de un minuto. La marca `~` sale solo cuando ninguna sesión ha recibido respuestas en 15 minutos.
+
+### Agregado
+
+- La franja dice cuándo la caché la renovó el handoff: `◑ caché vence en 24m · renovada por el handoff`. Escribir el handoff lee la caché y eso la renueva. Sin la etiqueta, el plazo parecía saltar hacia atrás con la sesión quieta, como si el indicador estuviera congelado.
+
 ## [3.6.0] - 08/10/2026
 
 ### Cambiado

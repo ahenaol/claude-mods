@@ -118,6 +118,8 @@ const folderKey = (cwd: string) => `cg.handoff.${cwd}`
 const ownKey = (id: string) => `cg.ho.${id}`
 const lastKey = (id: string) => `cg.last.${id}`
 const RATE_KEY = 'cg.qrate'
+// La cuota es de la cuenta, no de la conversación: la última medición de cualquier sesión.
+const QUOTA_KEY = 'cg.quota'
 const priceKey = (model: string) => `cg.price.${model}`
 
 // `n`: turnos respondidos en la conversación, contados por la mod. `$.session.turns()` también cuenta
@@ -178,6 +180,28 @@ async function remember($: any) {
   if (!id) return
   const last: Last = { at: (await read($, lastEnd)) ?? 0, tokens: await read($, tokens), n: await read($, turns) }
   await $.store.set(lastKey(id), last)
+}
+
+// La cuota solo llega con las respuestas de la API, así que una sesión quieta se queda con la de su
+// última respuesta. Cada sesión publica la suya y adopta la de otra si es más reciente.
+type SharedQuota = { windows: QuotaWindow[]; at: number }
+
+async function shareQuota($: any, at: number) {
+  const windows = await read($, quota)
+  if (windows.length === 0) return
+  const prev = (await $.store.get(QUOTA_KEY)) as SharedQuota | null
+  if (prev && prev.at >= at) return
+  await $.store.set(QUOTA_KEY, { windows, at } satisfies SharedQuota)
+}
+
+async function adoptQuota($: any) {
+  const shared = (await $.store.get(QUOTA_KEY)) as SharedQuota | null
+  if (!shared || !Array.isArray(shared.windows) || shared.windows.length === 0) return
+  // La propia vale desde la última medición o la última respuesta (ver la zona de cuota de la franja).
+  const own = Math.max(await read($, quotaAt), (await read($, lastEnd)) ?? 0)
+  if (shared.at <= own) return
+  await update($, quota, () => shared.windows)
+  await update($, quotaAt, () => shared.at)
 }
 
 // La caché se renueva con cada solicitud que llega a la API.
@@ -546,6 +570,7 @@ export const register: Register = (on, options) => {
       // Sin modelo todavía: se completa en el primer turno.
     }
     await restore($)
+    await adoptQuota($)
     await $.command.register({ name: 'guardian', description: 'Explica cómo leer la franja de caché, cuota y handoff' })
     await $.command.register({ name: 'handoff', description: 'Escribe el handoff de esta conversación ahora' })
     await $.command.register({
@@ -555,6 +580,7 @@ export const register: Register = (on, options) => {
     // Reloj: redibuja la franja cada minuto. El de una carga anterior se apaga al ver otro dueño.
     const clock = $.clock.every(60_000, async () => {
       if ((await read($, owner)) !== LOAD) return clock.cancel()
+      await adoptQuota($)
       await update($, tick, n => n + 1)
     })
     // Segundero: solo redibuja en el último minuto de la caché (cuenta regresiva) y en el segundo en
@@ -619,6 +645,7 @@ export const register: Register = (on, options) => {
     // Un turno que murió en un error de la API sin ninguna respuesta no renovó la caché.
     if (e.reason !== 'error' || isStepAnswered) {
       await touch($, now)
+      await shareQuota($, now)
       await scheduleAuto($)
     } else {
       await remember($)
@@ -672,6 +699,7 @@ export const register: Register = (on, options) => {
       await update($, quota, () => e.rateLimits)
       const at = await $.clock.now()
       await update($, quotaAt, () => at)
+      await shareQuota($, at)
       await learnRate($, e.rateLimits, e.cost?.usd, at)
     }
     await update($, windowSize, () => e.context.window)
@@ -1083,9 +1111,15 @@ export const register: Register = (on, options) => {
           </Text>,
         )
       } else if (cache) {
+        // Escribir el handoff consulta la conversación y eso renueva la caché: sin decirlo, el plazo
+        // parece saltar hacia atrás con la sesión quieta.
+        const isRenewed = !busy && status.kind === 'warm' && saved !== null && end === saved.at
         info.push(
-          <Text key="cache" color={cache.color} bold={isCold}>
-            {cache.dot} {cache.text}
+          <Text key="cache">
+            <Text color={cache.color} bold={isCold}>
+              {cache.dot} {cache.text}
+            </Text>
+            {isRenewed ? <Text dimColor>{isWide ? ' · renovada por el handoff' : ' · por handoff'}</Text> : null}
           </Text>,
         )
       }
