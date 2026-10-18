@@ -202,12 +202,22 @@ export const HANDOFF_PROMPT = [
 export const projectedPercent = (real: number, ideal: number): number | null =>
   ideal < 5 ? null : (real / ideal) * 100
 
+// Un déficit menor a esta fracción de la ventana (15 min en 5 h, ~8 h en la semanal) es ruido
+// de la proyección: se muestra el % en amarillo en vez de un tiempo sin cuota que alarma de más.
+export const DRY_NOISE = 0.05
+
+// A este ritmo, cuánto tiempo quedarías sin cuota antes de renovar: llegas a 100 % en
+// ventana × 100 / proyección, y lo que sobra de ventana es el tiempo seco.
+export const dryMs = (projected: number, windowMs: number): number =>
+  projected > 100 ? windowMs * (1 - 100 / projected) : 0
+
 // Color por proyección, como las herramientas de la comunidad: verde con holgura,
-// amarillo cerca del límite (desde `warn` %), rojo si te quedarías sin cuota antes de renovar.
+// amarillo cerca del límite (desde `warn` %) o con un déficit de ruido, rojo si te quedarías
+// sin cuota antes de renovar.
 export const paceOf = (real: number, projected: number | null, warn: number): Pace => {
   const p = projected ?? real
 
-  return p > 100 ? 'excede' : p >= warn ? 'cerca' : 'holgado'
+  return p > 100 / (1 - DRY_NOISE) ? 'excede' : p >= warn ? 'cerca' : 'holgado'
 }
 
 // Pasados estos minutos sin una respuesta nueva, el % real es la última lectura, no el actual.
@@ -220,6 +230,8 @@ export type QuotaView =
       real: number
       ideal: number
       projected: number | null
+      // Tiempo sin cuota antes de renovar; null si no hay déficit o es ruido.
+      dryMs: number | null
       tone: Pace
       leftMs: number
       isStale: boolean
@@ -238,19 +250,27 @@ export const quotaView = (
   if (now >= resetsAtMs) return { kind: 'renewed' }
   const ideal = idealPercent(resetsAtMs, windowMs, now)
   const projected = projectedPercent(percentUsed, ideal)
+  const tone = paceOf(percentUsed, projected, warn)
+  const leftMs = resetsAtMs - now
+  // Agotada, el tiempo seco es lo que falta para renovar, haya o no proyección.
+  const dry = percentUsed >= 100 ? leftMs : tone === 'excede' && projected !== null ? dryMs(projected, windowMs) : null
 
   return {
     kind: 'live',
     real: percentUsed,
     ideal,
     projected,
-    tone: paceOf(percentUsed, projected, warn),
-    leftMs: resetsAtMs - now,
+    dryMs: dry,
+    tone: percentUsed >= 100 ? 'excede' : tone,
+    leftMs,
     isStale: now - measuredAt > QUOTA_STALE_MS,
   }
 }
 
-export const formatProjection = (p: number): string => (p > 199 ? '>200' : padPercent(p).trim())
+// Lo que sigue a la flecha: el % con que llegarías al reinicio o, con déficit, el tiempo sin cuota.
+// Null si no hay nada que proyectar (primer 5 % de la ventana).
+export const formatOutlook = (projected: number | null, dry: number | null): string | null =>
+  dry !== null ? `−${formatShort(dry)}` : projected !== null ? `${padPercent(projected).trim()}%` : null
 
 // "claude-fable-5-1" -> "fable-5-1"; "claude-haiku-4-5-20251001" -> "haiku-4-5".
 export const formatModel = (id: string): string => id.replace(/^claude-/, '').replace(/-\d{8}$/, '')
@@ -415,9 +435,11 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     'Dos zonas fijas. Arriba la cuenta (cuota), abajo esta sesión, pegada al prompt y con los botones.',
     '',
     'Cuota:  5h ━━━●────── 28% → 82% · ↻ 3h 22m',
+    '        sem ━━━━━──●─── 71% → −1d 19h · ↻ 3d 7h',
     '  ● dónde vas (color del ritmo) · ━ dónde deberías ir para llegar justo a 100 % (tiempo transcurrido) · ─ lo que falta.',
     '  28% usado → 82% proyectado: con cuánto llegarías al reinicio a este ritmo · ↻ cuánto falta para el reinicio.',
-    `  Verde: llegas con holgura · amarillo: ${c.quotaWarn} % o más · rojo: te quedarías sin cuota antes de renovar.`,
+    '  → −1d 19h: a este ritmo se acaba antes del reinicio y quedarías ese tiempo sin cuota.',
+    `  Verde: llegas con holgura · amarillo: ${c.quotaWarn} % o más, o un déficit menor al ${DRY_NOISE * 100} % de la ventana · rojo: te quedarías sin cuota.`,
     '  Punto dentro de la barra: vas por debajo del ritmo ideal; más allá de su final, por encima.',
     '  "~28%": ninguna sesión tuya tuvo respuestas en 15 min, el dato es el de la última. "renovada": la ventana ya se reinició.',
     '',

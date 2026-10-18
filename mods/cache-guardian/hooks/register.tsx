@@ -21,7 +21,7 @@ import {
   effectiveTtl,
   effortAfterCommand,
   formatModel,
-  formatProjection,
+  formatOutlook,
   formatSpan,
   formatTokens,
   handoffFile,
@@ -1033,6 +1033,7 @@ export const register: Register = (on, options) => {
         )
       }
       const tone = PACE_COLOR[v.tone]
+      const outlook = formatOutlook(v.projected, v.dryMs)
 
       return (
         <Text key={w.kind}>
@@ -1054,10 +1055,10 @@ export const register: Register = (on, options) => {
           <Text> </Text>
           {v.isStale ? <Text dimColor>~</Text> : null}
           <Text>{padPercent(v.real).trim()}%</Text>
-          {v.projected === null ? null : (
+          {outlook === null ? null : (
             <Text>
               <Text dimColor> → </Text>
-              <Text color={tone}>{formatProjection(v.projected)}%</Text>
+              <Text color={tone}>{outlook}</Text>
             </Text>
           )}
           <Text dimColor> · ↻ {formatShort(v.leftMs)}</Text>

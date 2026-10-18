@@ -9,7 +9,8 @@ import {
   effectiveTtl,
   effortAfterCommand,
   formatModel,
-  formatProjection,
+  formatOutlook,
+  dryMs,
   formatSpan,
   formatTokens,
   handoffFile,
@@ -47,15 +48,51 @@ test('la proyección al renovar sale del % real y del ideal', () => {
   expect(projectedPercent(50, 50)).toBe(100)
   // En el primer 5 % de la ventana no se proyecta.
   expect(projectedPercent(3, 4)).toBeNull()
-  expect(formatProjection(79.2)).toBe('79')
-  expect(formatProjection(450)).toBe('>200')
+})
+
+test('con déficit, la flecha dice cuánto tiempo quedarías sin cuota', () => {
+  const H = 3_600_000
+  const WEEK = 7 * 24 * H
+  // 135 % en la semanal: te quedas ~1d 19h sin cuota (la del ejemplo de la ayuda).
+  expect(formatShort(dryMs(135, WEEK))).toBe('1d 19h')
+  expect(Math.round(dryMs(280, WEEK) / H)).toBe(108)
+  expect(dryMs(100, WEEK)).toBe(0)
+  expect(dryMs(40, WEEK)).toBe(0)
+  expect(formatOutlook(79.2, null)).toBe('79%')
+  expect(formatOutlook(135, dryMs(135, WEEK))).toBe('−1d 19h')
+  // Sin tope: 450 % ya no es ">200", es tiempo.
+  expect(formatOutlook(450, dryMs(450, 5 * H))).toBe('−3h 53m')
+  expect(formatOutlook(null, null)).toBeNull()
+})
+
+test('el déficit de ruido sigue en % y amarillo; agotada, el déficit es lo que falta', () => {
+  const H = 3_600_000
+  const now = 100 * H
+  // 18 % a 54 min de una ventana de 5 h: 101 %, ~3 min secos, por debajo del umbral.
+  const justo = quotaView(18, now + 5 * H - 54 * 60_000, 5 * H, now, now, 90)
+  expect(justo.kind === 'live' && justo.dryMs).toBeNull()
+  expect(justo.kind === 'live' && justo.tone).toBe('cerca')
+  // 60 % a las 2 h: 150 %, 1h 40m sin cuota.
+  const corto = quotaView(60, now + 3 * H, 5 * H, now, now, 90)
+  expect(corto.kind === 'live' && corto.tone).toBe('excede')
+  expect(corto.kind === 'live' && formatShort(corto.dryMs ?? 0)).toBe('1h 40m')
+  // Agotada: coincide con el tiempo al reinicio, incluso antes de que haya proyección.
+  const agotada = quotaView(100, now + 2 * H, 7 * 24 * H, now, now, 90)
+  expect(agotada.kind === 'live' && agotada.dryMs).toBe(2 * H)
+  const temprana = quotaView(100, now + 4.9 * H, 5 * H, now, now, 90)
+  expect(temprana.kind === 'live' && temprana.projected).toBeNull()
+  expect(temprana.kind === 'live' && temprana.dryMs).toBe(4.9 * H)
+  expect(temprana.kind === 'live' && temprana.tone).toBe('excede')
 })
 
 test('el color sigue la proyección: holgura, cerca del límite o sin cuota', () => {
   expect(paceOf(19, 79, 80)).toBe('holgado')
   expect(paceOf(40, 80, 80)).toBe('cerca')
   expect(paceOf(60, 100, 80)).toBe('cerca')
-  expect(paceOf(60, 101, 80)).toBe('excede')
+  // Hasta un déficit del 5 % de la ventana (≈105 %) es ruido: amarillo, no rojo.
+  expect(paceOf(60, 101, 80)).toBe('cerca')
+  expect(paceOf(60, 105, 80)).toBe('cerca')
+  expect(paceOf(60, 106, 80)).toBe('excede')
   // Sin proyección usa el % real.
   expect(paceOf(30, null, 80)).toBe('holgado')
   expect(paceOf(90, null, 80)).toBe('cerca')

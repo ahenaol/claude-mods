@@ -1,6 +1,6 @@
 {
   "name": "cache-guardian",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "Reloj de caché, cuota (5 h y semanal) frente al ritmo ideal, handoff preventivo y guardián del regreso",
   "author": {
     "name": "Alejandro Henao Loaiza",
@@ -61,7 +61,7 @@
     "quotaWarn": {
       "type": "number",
       "title": "Alerta de cuota (% proyectado)",
-      "description": "Desde este % proyectado al renovar la barra pasa a amarillo; sobre 100 % es rojo",
+      "description": "Desde este % proyectado al renovar la barra pasa a amarillo; en rojo dice cuánto tiempo quedarías sin cuota",
       "default": 90
     },
     "fullPercent": {

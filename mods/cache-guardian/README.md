@@ -76,17 +76,19 @@ La franja tiene dos zonas fijas. Arriba va la cuota, que es de la cuenta y cambi
 | `━` y `─` | `━` es el tiempo transcurrido de la ventana, en neutro: dónde deberías ir para llegar a la renovación justo en 100 %; `─` es lo que falta |
 | `28%` | Consumo real de la ventana |
 | `→ 82%` | Proyección: con qué % llegarías al reinicio si sigues a este ritmo |
+| `→ −1d 19h` | Déficit: a este ritmo la cuota se acaba antes del reinicio y quedarías ese tiempo sin ella. Reemplaza al % cuando pasa de 100 |
 | `↻ 3h 22m` | Tiempo que falta para que la ventana se reinicie |
 | `~19%` | Ninguna de tus sesiones ha recibido respuestas en más de 15 minutos: el dato es de la última y puede quedarse corto |
 | `5h renovada` | La ventana se reinició durante la pausa |
 
 La cuota solo llega con las respuestas de la API. Como es de la cuenta y no de la conversación, cada sesión comparte la suya con las demás de este equipo: una sesión quieta toma en menos de un minuto lo que midió otra que sí está trabajando, así que todas muestran el mismo dato.
 
-El color sigue la proyección: verde por debajo del 90 % (opción `quotaWarn`), amarillo entre 90 y 100 % y rojo por encima de 100 %. En rojo, a este ritmo te quedas sin cuota antes de que la ventana se renueve.
+El color sigue la proyección: verde por debajo del 90 % (opción `quotaWarn`), amarillo desde ahí y rojo cuando te quedarías sin cuota antes de que la ventana se renueve. En rojo la flecha ya no dice un %, sino cuánto tiempo quedarías sin cuota. Un déficit menor al 5 % de la ventana (15 min en la de 5 h, unas 8 h en la semanal) es ruido de la proyección: se queda en amarillo y con el %, por ejemplo `→ 103%`.
 
 ```text
 ideal      = 100 × (1 − tiempo_que_falta / duración_de_la_ventana)
 proyección = real / ideal × 100
+sin cuota  = duración_de_la_ventana × (1 − 100 / proyección)   si proyección > 100
 ```
 
 El ideal semanal corre 24/7, así que la proyección de la semana sale baja después de las noches y los fines de semana. La proyección supone un ritmo constante: una ráfaga al inicio de la ventana la dispara.

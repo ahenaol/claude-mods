@@ -2,6 +2,14 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.8.0] - 18/10/2026
+
+### Cambiado
+
+- Cuando a este ritmo la cuota se acaba antes del reinicio, la flecha dice cuánto tiempo quedarías sin ella en vez del % proyectado: `sem ━━━━━──●─── 71% → −1d 19h · ↻ 3d 7h`. Un 135 % no decía mucho y por encima de 200 % se quedaba fijo en `>200%`; el tiempo sigue siendo útil a cualquier ritmo. Con holgura la flecha sigue con el %.
+- Un déficit menor al 5 % de la ventana (15 min en la de 5 h, unas 8 h en la semanal) se toma como ruido de la proyección: queda en amarillo y con el % (`→ 103%`), no en rojo.
+- `/guardian` explica el nuevo caso con un ejemplo de la ventana semanal.
+
 ## [3.7.0] - 16/10/2026
 
 ### Cambiado
