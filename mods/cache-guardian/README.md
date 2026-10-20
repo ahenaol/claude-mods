@@ -1,6 +1,6 @@
 # cache-guardian
 
-[![Versión](https://img.shields.io/badge/versi%C3%B3n-3.5.0-6a4fd8.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versi%C3%B3n-3.9.0-6a4fd8.svg)](CHANGELOG.md)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.289-d97757.svg)](https://claude.com/claude-code)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../LICENSE)
 
@@ -90,6 +90,8 @@ ideal      = 100 × (1 − tiempo_que_falta / duración_de_la_ventana)
 proyección = real / ideal × 100
 sin cuota  = duración_de_la_ventana × (1 − 100 / proyección)   si proyección > 100
 ```
+
+La proyección no se calcula hasta que haya pasado el 5 % de la ventana en la de 5 h (15 min) y el 20 % en la semanal (~1d 10h): antes de eso una ráfaga inicial se extrapola a toda la ventana, y la franja muestra solo el % y el `↻`, sin flecha.
 
 El ideal semanal corre 24/7, así que la proyección de la semana sale baja después de las noches y los fines de semana. La proyección supone un ritmo constante: una ráfaga al inicio de la ventana la dispara.
 

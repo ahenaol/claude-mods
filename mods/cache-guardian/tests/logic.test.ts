@@ -23,6 +23,8 @@ import {
   formatShort,
   padPercent,
   projectedPercent,
+  minIdealFor,
+  WEEKLY_MIN_IDEAL,
   quotaBar,
   behindOf,
   formatClock,
@@ -48,6 +50,33 @@ test('la proyección al renovar sale del % real y del ideal', () => {
   expect(projectedPercent(50, 50)).toBe(100)
   // En el primer 5 % de la ventana no se proyecta.
   expect(projectedPercent(3, 4)).toBeNull()
+  // La semanal pide 20 %: antes de eso no hay proyección, y desde ahí sí.
+  expect(projectedPercent(11, 5.1, WEEKLY_MIN_IDEAL)).toBeNull()
+  expect(Math.round(projectedPercent(11, 20, WEEKLY_MIN_IDEAL) ?? 0)).toBe(55)
+})
+
+test('la semanal no proyecta con 9 h de ventana, la de 5 h sí con 15 min', () => {
+  const H = 3_600_000
+  const WEEK = 7 * 24 * H
+  const now = 1_000 * H
+  // 11 % a las 9 h de la semana: antes daba −3d 18h; ahora no hay flecha y el punto queda verde.
+  const pronto = quotaView(11, now + WEEK - 9 * H, WEEK, now, now, 90)
+  expect(pronto.kind === 'live' && pronto.projected).toBeNull()
+  expect(pronto.kind === 'live' && pronto.dryMs).toBeNull()
+  expect(pronto.kind === 'live' && pronto.tone).toBe('holgado')
+  expect(pronto.kind === 'live' && formatOutlook(pronto.projected, pronto.dryMs)).toBeNull()
+  // A 34 h (pasado el 20 %) con 11 %: 54 %, firme y en verde.
+  const firme = quotaView(11, now + WEEK - 34 * H, WEEK, now, now, 90)
+  expect(firme.kind === 'live' && Math.round(firme.projected ?? 0)).toBe(54)
+  // Con 25 % a 34 h de la semana se proyecta 124 %: −1d 8h, en rojo.
+  const alerta = quotaView(25, now + WEEK - 34 * H, WEEK, now, now, 90)
+  expect(alerta.kind === 'live' && alerta.tone).toBe('excede')
+  expect(alerta.kind === 'live' && formatShort(alerta.dryMs ?? 0)).toBe('1d 8h')
+  // La ventana de 5 h conserva su umbral de 5 % (15 min).
+  const cinco = quotaView(6, now + 5 * H - 20 * 60_000, 5 * H, now, now, 90)
+  expect(cinco.kind === 'live' && cinco.projected).not.toBeNull()
+  expect(minIdealFor(5 * H)).toBe(5)
+  expect(minIdealFor(WEEK)).toBe(20)
 })
 
 test('con déficit, la flecha dice cuánto tiempo quedarías sin cuota', () => {

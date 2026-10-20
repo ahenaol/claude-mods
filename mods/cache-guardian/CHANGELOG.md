@@ -2,6 +2,14 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.9.0] - 20/10/2026
+
+### Cambiado
+
+- La ventana semanal no proyecta hasta que pase el 20 % de la semana (~1d 10h). Antes lo hacía desde el 5 % (~8 h), y 11 % usado en las primeras 9 h daba `→ −3d 18h` en rojo: una ráfaga inicial extrapolada a toda la semana. Mientras no hay proyección, la franja muestra solo el %, el punto en verde y el `↻`, sin flecha.
+- La ventana de 5 h mantiene su umbral de 5 % (15 min).
+- `/guardian` explica por qué a veces no hay flecha.
+
 ## [3.8.0] - 18/10/2026
 
 ### Cambiado
