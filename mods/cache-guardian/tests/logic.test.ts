@@ -46,35 +46,39 @@ test('el ideal avanza lineal con el tiempo transcurrido de la ventana', () => {
 })
 
 test('la proyección al renovar sale del % real y del ideal', () => {
-  expect(Math.round(projectedPercent(19, 24) ?? 0)).toBe(79)
+  expect(Math.round(projectedPercent(19, 24))).toBe(79)
   expect(projectedPercent(50, 50)).toBe(100)
-  // En el primer 5 % de la ventana no se proyecta.
-  expect(projectedPercent(3, 4)).toBeNull()
-  // La semanal pide 20 %: antes de eso no hay proyección, y desde ahí sí.
-  expect(projectedPercent(11, 5.1, WEEKLY_MIN_IDEAL)).toBeNull()
-  expect(Math.round(projectedPercent(11, 20, WEEKLY_MIN_IDEAL) ?? 0)).toBe(55)
+  // En el primer 5 % de la ventana el denominador tiene piso: 3 % a 4 % del tiempo da 60 %, no 75 %.
+  expect(projectedPercent(3, 4)).toBe(60)
+  // La semanal tiene piso de 20 %: 11 % a 5 % del tiempo da 55 %, igual que a 20 %.
+  expect(Math.round(projectedPercent(11, 5.1, WEEKLY_MIN_IDEAL))).toBe(55)
+  expect(Math.round(projectedPercent(11, 20, WEEKLY_MIN_IDEAL))).toBe(55)
+  // Recién renovada (ideal 0) no divide por cero.
+  expect(projectedPercent(2, 0, WEEKLY_MIN_IDEAL)).toBe(10)
 })
 
-test('la semanal no proyecta con 9 h de ventana, la de 5 h sí con 15 min', () => {
+test('al inicio de la semana la proyección es una cota inferior, no un silencio', () => {
   const H = 3_600_000
   const WEEK = 7 * 24 * H
   const now = 1_000 * H
-  // 11 % a las 9 h de la semana: antes daba −3d 18h; ahora no hay flecha y el punto queda verde.
-  const pronto = quotaView(11, now + WEEK - 9 * H, WEEK, now, now, 90)
-  expect(pronto.kind === 'live' && pronto.projected).toBeNull()
-  expect(pronto.kind === 'live' && pronto.dryMs).toBeNull()
-  expect(pronto.kind === 'live' && pronto.tone).toBe('holgado')
-  expect(pronto.kind === 'live' && formatOutlook(pronto.projected, pronto.dryMs)).toBeNull()
-  // A 34 h (pasado el 20 %) con 11 %: 54 %, firme y en verde.
+  // Ráfaga: 11 % a las 9 h de la semana da ≥55 %, en verde (antes de 3.9.0 daba −3d 18h).
+  const rafaga = quotaView(11, now + WEEK - 9 * H, WEEK, now, now, 90)
+  expect(rafaga.kind === 'live' && Math.round(rafaga.projected)).toBe(55)
+  expect(rafaga.kind === 'live' && rafaga.isFloor).toBe(true)
+  expect(rafaga.kind === 'live' && rafaga.tone).toBe('holgado')
+  expect(rafaga.kind === 'live' && formatOutlook(rafaga.projected, rafaga.dryMs, rafaga.isFloor)).toBe('≥55%')
+  // Consumo alto: 50 % a las 30 h de la semana. En 3.9.0 quedaba verde y sin flecha; ahora ≥250 %, rojo.
+  const alto = quotaView(50, now + WEEK - 30 * H, WEEK, now, now, 90)
+  expect(alto.kind === 'live' && alto.tone).toBe('excede')
+  expect(alto.kind === 'live' && formatOutlook(alto.projected, alto.dryMs, alto.isFloor)).toBe('−4d 4h+')
+  // Pasado el 20 %, la regla de tres es la de siempre: 11 % a 34 h da 54 %, sin piso.
   const firme = quotaView(11, now + WEEK - 34 * H, WEEK, now, now, 90)
-  expect(firme.kind === 'live' && Math.round(firme.projected ?? 0)).toBe(54)
+  expect(firme.kind === 'live' && Math.round(firme.projected)).toBe(54)
+  expect(firme.kind === 'live' && firme.isFloor).toBe(false)
   // Con 25 % a 34 h de la semana se proyecta 124 %: −1d 8h, en rojo.
   const alerta = quotaView(25, now + WEEK - 34 * H, WEEK, now, now, 90)
   expect(alerta.kind === 'live' && alerta.tone).toBe('excede')
   expect(alerta.kind === 'live' && formatShort(alerta.dryMs ?? 0)).toBe('1d 8h')
-  // La ventana de 5 h conserva su umbral de 5 % (15 min).
-  const cinco = quotaView(6, now + 5 * H - 20 * 60_000, 5 * H, now, now, 90)
-  expect(cinco.kind === 'live' && cinco.projected).not.toBeNull()
   expect(minIdealFor(5 * H)).toBe(5)
   expect(minIdealFor(WEEK)).toBe(20)
 })
@@ -91,7 +95,6 @@ test('con déficit, la flecha dice cuánto tiempo quedarías sin cuota', () => {
   expect(formatOutlook(135, dryMs(135, WEEK))).toBe('−1d 19h')
   // Sin tope: 450 % ya no es ">200", es tiempo.
   expect(formatOutlook(450, dryMs(450, 5 * H))).toBe('−3h 53m')
-  expect(formatOutlook(null, null)).toBeNull()
 })
 
 test('el déficit de ruido sigue en % y amarillo; agotada, el déficit es lo que falta', () => {
@@ -109,7 +112,7 @@ test('el déficit de ruido sigue en % y amarillo; agotada, el déficit es lo que
   const agotada = quotaView(100, now + 2 * H, 7 * 24 * H, now, now, 90)
   expect(agotada.kind === 'live' && agotada.dryMs).toBe(2 * H)
   const temprana = quotaView(100, now + 4.9 * H, 5 * H, now, now, 90)
-  expect(temprana.kind === 'live' && temprana.projected).toBeNull()
+  expect(temprana.kind === 'live' && temprana.isFloor).toBe(true)
   expect(temprana.kind === 'live' && temprana.dryMs).toBe(4.9 * H)
   expect(temprana.kind === 'live' && temprana.tone).toBe('excede')
 })
@@ -204,7 +207,7 @@ test('la cuota no muestra datos viejos: ventana renovada y lectura vieja', () =>
   expect(quotaView(40, now - 1, 5 * H, now, now, 80)).toEqual({ kind: 'renewed' })
   const fresh = quotaView(40, now + 2.5 * H, 5 * H, now, now - 60_000, 80)
   expect(fresh.kind === 'live' && fresh.isStale).toBe(false)
-  expect(fresh.kind === 'live' && Math.round(fresh.projected ?? 0)).toBe(80)
+  expect(fresh.kind === 'live' && Math.round(fresh.projected)).toBe(80)
   const old = quotaView(40, now + 2.5 * H, 5 * H, now, now - 20 * 60_000, 80)
   expect(old.kind === 'live' && old.isStale).toBe(true)
 })

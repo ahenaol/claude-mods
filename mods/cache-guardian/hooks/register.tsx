@@ -1033,7 +1033,7 @@ export const register: Register = (on, options) => {
         )
       }
       const tone = PACE_COLOR[v.tone]
-      const outlook = formatOutlook(v.projected, v.dryMs)
+      const outlook = formatOutlook(v.projected, v.dryMs, v.isFloor)
 
       return (
         <Text key={w.kind}>
@@ -1055,12 +1055,8 @@ export const register: Register = (on, options) => {
           <Text> </Text>
           {v.isStale ? <Text dimColor>~</Text> : null}
           <Text>{padPercent(v.real).trim()}%</Text>
-          {outlook === null ? null : (
-            <Text>
-              <Text dimColor> → </Text>
-              <Text color={tone}>{outlook}</Text>
-            </Text>
-          )}
+          <Text dimColor> → </Text>
+          <Text color={tone}>{outlook}</Text>
           <Text dimColor> · ↻ {formatShort(v.leftMs)}</Text>
         </Text>
       )

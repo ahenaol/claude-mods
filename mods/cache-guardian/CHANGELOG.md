@@ -2,6 +2,17 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.10.0] - 21/10/2026
+
+### Corregido
+
+- La ventana semanal se quedaba en verde y sin flecha durante su primer 20 % (~1d 10h) aunque el consumo fuera alto: 50 % al día siguiente del reinicio no avisaba nada, porque sin proyección el color salía del % real contra el umbral de 90 %.
+
+### Cambiado
+
+- La proyección ya no se apaga al inicio de la ventana. Es la misma regla de tres, con un piso en el denominador: antes del 5 % (5 h) o del 20 % (semanal) del tiempo, divide como si ya hubiera pasado ese tramo. El resultado es una cota inferior, marcada `≥55%` o `−4d 4h+`: una ráfaga inicial no se exagera (11 % en 9 h da `≥55%`, verde) y un consumo alto sí se ve (50 % en 30 h da `−4d 4h+`, rojo). No supone horario laboral ni ningún patrón de uso.
+- `/guardian` explica el `≥` y el `+`.
+
 ## [3.9.0] - 20/10/2026
 
 ### Cambiado

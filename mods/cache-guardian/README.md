@@ -87,11 +87,11 @@ El color sigue la proyección: verde por debajo del 90 % (opción `quotaWarn`), 
 
 ```text
 ideal      = 100 × (1 − tiempo_que_falta / duración_de_la_ventana)
-proyección = real / ideal × 100
+proyección = real / max(ideal, piso) × 100   piso: 5 en la de 5 h, 20 en la semanal
 sin cuota  = duración_de_la_ventana × (1 − 100 / proyección)   si proyección > 100
 ```
 
-La proyección no se calcula hasta que haya pasado el 5 % de la ventana en la de 5 h (15 min) y el 20 % en la semanal (~1d 10h): antes de eso una ráfaga inicial se extrapola a toda la ventana, y la franja muestra solo el % y el `↻`, sin flecha.
+Al inicio de la ventana, antes del 5 % del tiempo en la de 5 h (15 min) y del 20 % en la semanal (~1d 10h), la proyección divide como si ya hubiera pasado ese tramo, para que una ráfaga inicial no se extrapole a toda la ventana. Ese valor es una cota inferior y se marca así: `→ ≥55%` o, con déficit, `→ −4d 4h+`. Si sale rojo, el ritmo real es igual o peor.
 
 El ideal semanal corre 24/7, así que la proyección de la semana sale baja después de las noches y los fines de semana. La proyección supone un ritmo constante: una ráfaga al inicio de la ventana la dispara.
 

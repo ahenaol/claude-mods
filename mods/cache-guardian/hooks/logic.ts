@@ -198,19 +198,23 @@ export const HANDOFF_PROMPT = [
 ].join('\n')
 
 // Proyección al cierre de la ventana: a este ritmo, ¿con qué % llegas a la renovación?
-// No se calcula mientras el tiempo transcurrido sea menor a `minIdeal` (el cociente se dispara).
+// Regla de tres con piso en el denominador: mientras el tiempo transcurrido sea menor a `minIdeal`,
+// se divide por `minIdeal` en vez del ideal real. Así una ráfaga inicial no se extrapola a toda la
+// ventana (11 % en las primeras 9 h de la semana da 55 %, no 300 %), pero un consumo alto temprano
+// sí se ve (50 % el primer día da al menos 250 %). Con el piso el resultado es una cota inferior:
+// el ritmo real es igual o peor, nunca mejor, así que no alarma de más y no se queda callado.
 export const PROJECTION_MIN_IDEAL = 5
 
 // La semanal necesita más historia que la de 5 h: 5 % son 15 min de una y ~8 h de la otra, y 8 h
 // de una semana de trabajo no dicen nada del ritmo de la semana. Con 20 % (~1d 10h) ya se ven
-// días laborales completos y la proyección deja de ser una ráfaga extrapolada.
+// días laborales completos y el piso deja de aplicar.
 export const WEEKLY_MIN_IDEAL = 20
 
 export const minIdealFor = (windowMs: number): number =>
   windowMs > 24 * HOUR ? WEEKLY_MIN_IDEAL : PROJECTION_MIN_IDEAL
 
-export const projectedPercent = (real: number, ideal: number, minIdeal = PROJECTION_MIN_IDEAL): number | null =>
-  ideal < minIdeal ? null : (real / ideal) * 100
+export const projectedPercent = (real: number, ideal: number, minIdeal = PROJECTION_MIN_IDEAL): number =>
+  (real / Math.max(ideal, minIdeal)) * 100
 
 // Un déficit menor a esta fracción de la ventana (15 min en 5 h, ~8 h en la semanal) es ruido
 // de la proyección: se muestra el % en amarillo en vez de un tiempo sin cuota que alarma de más.
@@ -224,8 +228,8 @@ export const dryMs = (projected: number, windowMs: number): number =>
 // Color por proyección, como las herramientas de la comunidad: verde con holgura,
 // amarillo cerca del límite (desde `warn` %) o con un déficit de ruido, rojo si te quedarías
 // sin cuota antes de renovar.
-export const paceOf = (real: number, projected: number | null, warn: number): Pace => {
-  const p = projected ?? real
+export const paceOf = (real: number, projected: number, warn: number): Pace => {
+  const p = Math.max(projected, real)
 
   return p > 100 / (1 - DRY_NOISE) ? 'excede' : p >= warn ? 'cerca' : 'holgado'
 }
@@ -239,7 +243,9 @@ export type QuotaView =
       kind: 'live'
       real: number
       ideal: number
-      projected: number | null
+      projected: number
+      // La proyección usa el piso del denominador: es una cota inferior ("al menos").
+      isFloor: boolean
       // Tiempo sin cuota antes de renovar; null si no hay déficit o es ruido.
       dryMs: number | null
       tone: Pace
@@ -259,17 +265,19 @@ export const quotaView = (
 ): QuotaView => {
   if (now >= resetsAtMs) return { kind: 'renewed' }
   const ideal = idealPercent(resetsAtMs, windowMs, now)
-  const projected = projectedPercent(percentUsed, ideal, minIdealFor(windowMs))
+  const minIdeal = minIdealFor(windowMs)
+  const projected = projectedPercent(percentUsed, ideal, minIdeal)
   const tone = paceOf(percentUsed, projected, warn)
   const leftMs = resetsAtMs - now
   // Agotada, el tiempo seco es lo que falta para renovar, haya o no proyección.
-  const dry = percentUsed >= 100 ? leftMs : tone === 'excede' && projected !== null ? dryMs(projected, windowMs) : null
+  const dry = percentUsed >= 100 ? leftMs : tone === 'excede' ? dryMs(projected, windowMs) : null
 
   return {
     kind: 'live',
     real: percentUsed,
     ideal,
     projected,
+    isFloor: ideal < minIdeal,
     dryMs: dry,
     tone: percentUsed >= 100 ? 'excede' : tone,
     leftMs,
@@ -278,9 +286,11 @@ export const quotaView = (
 }
 
 // Lo que sigue a la flecha: el % con que llegarías al reinicio o, con déficit, el tiempo sin cuota.
-// Null si no hay nada que proyectar (primer 5 % de la ventana).
-export const formatOutlook = (projected: number | null, dry: number | null): string | null =>
-  dry !== null ? `−${formatShort(dry)}` : projected !== null ? `${padPercent(projected).trim()}%` : null
+// Con el piso del denominador es una cota inferior: `≥55%` o `−4d 4h+` ("al menos").
+export const formatOutlook = (projected: number, dry: number | null, isFloor = false): string =>
+  dry !== null
+    ? `−${formatShort(dry)}${isFloor ? '+' : ''}`
+    : `${isFloor ? '≥' : ''}${padPercent(projected).trim()}%`
 
 // "claude-fable-5-1" -> "fable-5-1"; "claude-haiku-4-5-20251001" -> "haiku-4-5".
 export const formatModel = (id: string): string => id.replace(/^claude-/, '').replace(/-\d{8}$/, '')
@@ -449,7 +459,8 @@ export const legend = (c: { minTokens: number; softTokens: number; fullPercent: 
     '  ● dónde vas (color del ritmo) · ━ dónde deberías ir para llegar justo a 100 % (tiempo transcurrido) · ─ lo que falta.',
     '  28% usado → 82% proyectado: con cuánto llegarías al reinicio a este ritmo · ↻ cuánto falta para el reinicio.',
     '  → −1d 19h: a este ritmo se acaba antes del reinicio y quedarías ese tiempo sin cuota.',
-    `  Sin flecha: aún es pronto para proyectar (${PROJECTION_MIN_IDEAL} % de la ventana en la de 5 h, ${WEEKLY_MIN_IDEAL} %, ~1d 10h, en la semanal).`,
+    `  "≥55%" o "−4d 4h+": al inicio de la ventana (antes del ${PROJECTION_MIN_IDEAL} % en la de 5 h y del ${WEEKLY_MIN_IDEAL} %, ~1d 10h, en la semanal)`,
+    '  la proyección es "al menos": divide como si ya hubiera pasado ese tramo, para no exagerar una ráfaga inicial.',
     `  Verde: llegas con holgura · amarillo: ${c.quotaWarn} % o más, o un déficit menor al ${DRY_NOISE * 100} % de la ventana · rojo: te quedarías sin cuota.`,
     '  Punto dentro de la barra: vas por debajo del ritmo ideal; más allá de su final, por encima.',
     '  "~28%": ninguna sesión tuya tuvo respuestas en 15 min, el dato es el de la última. "renovada": la ventana ya se reinició.',
