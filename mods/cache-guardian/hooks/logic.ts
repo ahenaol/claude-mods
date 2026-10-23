@@ -104,9 +104,9 @@ export type Pace = 'holgado' | 'cerca' | 'excede'
 
 // Un solo mapa de color por ritmo: cámbialo aquí si prefieres otra semántica.
 export const PACE_COLOR: Record<Pace, string> = {
-  holgado: 'green',
-  cerca: 'yellow',
-  excede: 'red',
+  holgado: 'success',
+  cerca: 'warning',
+  excede: 'error',
 }
 
 // Barra de `width` celdas: `━` hasta el % ideal (el tiempo transcurrido de la ventana) y `─`

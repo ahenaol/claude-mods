@@ -2,6 +2,12 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.10.1] - 23/10/2026
+
+### Corregido
+
+- Los colores de la franja eran nombres fijos de terminal (`yellow`, `red`, `green`, `cyan`, `gray`) y no seguían el tema: con el tema claro de la app el amarillo de contexto pesado (`153k/1M 15%`), del esfuerzo alto o del ritmo de cuota casi no se leía. Ahora usan las claves del tema (`warning`, `error`, `success`, `suggestion`, `inactive`), que cada tema pinta con buen contraste. Las etiquetas con fondo (texto negro sobre amarillo o rojo) se quedan igual porque ya contrastan en los dos temas.
+
 ## [3.10.0] - 21/10/2026
 
 ### Corregido

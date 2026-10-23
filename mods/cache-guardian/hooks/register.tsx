@@ -818,7 +818,7 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
-        <Text color="gray">
+        <Text color="inactive">
           ○ {g.coldMs > KEEP_MS ? 'La caché está fría' : `La caché venció hace ${formatSpan(g.coldMs)}`}. Enviar así
           re-cachea {formatTokens(g.tokens)} tokens{shareSuffix(share)}.
         </Text>
@@ -1075,7 +1075,7 @@ export const register: Register = (on, options) => {
           <Text dimColor>{model ? formatModel(model) : ''}</Text>
           {model && effort ? <Text dimColor> · </Text> : null}
           {effort ? (
-            <Text color={isHighEffort(effort) && !isCold ? 'yellow' : undefined} dimColor={isCold || !isHighEffort(effort)}>
+            <Text color={isHighEffort(effort) && !isCold ? 'warning' : undefined} dimColor={isCold || !isHighEffort(effort)}>
               {effort}
             </Text>
           ) : null}
@@ -1084,7 +1084,7 @@ export const register: Register = (on, options) => {
     }
     if (tk > 0) {
       // Con la caché fría todo lo demás se atenúa: el único color de la línea es el de la alerta.
-      const ctxColor = isCold ? undefined : hint?.kind === 'full' ? 'red' : hint?.kind === 'heavy' ? 'yellow' : undefined
+      const ctxColor = isCold ? undefined : hint?.kind === 'full' ? 'error' : hint?.kind === 'heavy' ? 'warning' : undefined
       info.push(
         <Text key="ctx">
           <Text color={ctxColor} dimColor={isCold}>{win > 0 ? `${formatTokens(tk)}/${formatTokens(win)}` : formatTokens(tk)}</Text>
@@ -1095,11 +1095,11 @@ export const register: Register = (on, options) => {
     if (big) {
       // El círculo se vacía con la vida de la caché (● ◕ ◑ ◔ ○); en el último minuto, pastilla con segundos.
       const cache = busy
-        ? { dot: '●', color: 'cyan', text: 'caché en uso' }
+        ? { dot: '●', color: 'suggestion', text: 'caché en uso' }
         : status.kind === 'warm'
-          ? { dot: cacheGlyph(status.leftMs, ttl), color: level === 'calm' ? 'green' : 'yellow', text: `caché vence en ${formatShort(status.leftMs)}` }
+          ? { dot: cacheGlyph(status.leftMs, ttl), color: level === 'calm' ? 'success' : 'warning', text: `caché vence en ${formatShort(status.leftMs)}` }
           : status.kind === 'cold'
-            ? { dot: '○', color: 'red', text: status.coldMs > KEEP_MS ? 'caché fría' : `caché fría hace ${formatShort(status.coldMs)}` }
+            ? { dot: '○', color: 'error', text: status.coldMs > KEEP_MS ? 'caché fría' : `caché fría hace ${formatShort(status.coldMs)}` }
             : null
       if (isLast && status.kind === 'warm') {
         info.push(
@@ -1130,15 +1130,15 @@ export const register: Register = (on, options) => {
     } else if (saved && big) {
       info.push(
         <Text key="ho">
-          <Text color={isCold ? undefined : 'green'} dimColor={isCold}>{CHECK}</Text>
+          <Text color={isCold ? undefined : 'success'} dimColor={isCold}>{CHECK}</Text>
           <Text dimColor> handoff {savedAt}</Text>
-          {behind > 0 ? <Text color={isCold ? undefined : 'yellow'} dimColor={isCold}> +{behind}</Text> : null}
+          {behind > 0 ? <Text color={isCold ? undefined : 'warning'} dimColor={isCold}> +{behind}</Text> : null}
         </Text>,
       )
     }
     if (hint && hint.kind !== 'heavy') {
       info.push(
-        <Text key="hint" color={isCold ? undefined : 'yellow'} dimColor={isCold}>
+        <Text key="hint" color={isCold ? undefined : 'warning'} dimColor={isCold}>
           {hint.text}
         </Text>,
       )
@@ -1193,7 +1193,7 @@ export const register: Register = (on, options) => {
     const offer = tk === 0 && pend && !attaching
     if (offer) {
       info.push(
-        <Text key="offer" color="cyan">
+        <Text key="offer" color="suggestion">
           ◆ handoff de esta carpeta, de hace {formatShort(now - pend.at)}
         </Text>,
       )
@@ -1204,7 +1204,7 @@ export const register: Register = (on, options) => {
     }
     if (attaching) {
       info.push(
-        <Text key="attach" color="green">
+        <Text key="attach" color="success">
           {CHECK} el handoff irá con tu próximo mensaje
         </Text>,
       )
