@@ -156,7 +156,7 @@ Se pulsan con clic, o pasando el foco a la franja con `ctrl+x tab`, presionando 
 | `/handoff` | Escribe el handoff ahora y lo muestra en el chat |
 | `/retomar` | Actualiza el handoff si hace falta, limpia la conversación y lo deja listo para tu próximo mensaje |
 
-Un `/clear` escrito a mano, con más de 40k tokens, actualiza el handoff antes de limpiar y después lo deja ofrecido.
+Un `/clear` escrito a mano empieza una conversación limpia: no actualiza el handoff ni lo ofrece, para no gastar tokens. El handoff guardado sigue disponible; para empezar con él, usa **Retomar limpio** o `/retomar`.
 
 ## El handoff
 

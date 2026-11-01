@@ -103,6 +103,8 @@ let endedId = ''
 let isStepAnswered = false
 // Retomar limpio en curso: dos clics seguidos no limpian dos veces.
 let isResuming = false
+// /clear escrito a mano en curso: la conversación siguiente arranca limpia, sin ofrecer el handoff.
+let isPlainClear = false
 // Última lectura de la ventana de 5 h con el costo de la sesión: base de la próxima muestra de % por dólar.
 let quotaBase: QuotaMark | null = null
 // Costo y tokens del turno en curso, para aprender el precio por token. Solo sirve si respondió un único
@@ -228,11 +230,13 @@ async function restore($: any) {
 
   if (!hasHistory(messages)) {
     // Conversación nueva (al abrir claude o tras /clear): se ofrece el handoff de la carpeta, si no
-    // hay ya uno en camino (el de Retomar limpio o el de un /clear escrito a mano).
+    // hay ya uno en camino (el de Retomar limpio). Tras un /clear escrito a mano no se ofrece nada.
     await update($, lastEnd, () => null)
     await update($, tokens, () => 0)
     await update($, handoff, () => null)
-    const offer = offerable(asHandoff(await $.store.get(folderKey(cwd))), now)
+    const isClean = isPlainClear
+    isPlainClear = false
+    const offer = isClean ? null : offerable(asHandoff(await $.store.get(folderKey(cwd))), now)
     if (offer && !(await read($, pending))) {
       await update($, pending, () => offer)
       await update($, isAttaching, () => false)
@@ -401,15 +405,13 @@ async function consume($: any, h: Handoff) {
 }
 
 // El handoff con el que se limpia: si la caché está tibia y el guardado se quedó atrás (o no
-// existe), lo reescribe primero, porque ahí releer el contexto sale barato. `notice` se avisa solo
-// cuando de verdad se va a escribir.
+// existe), lo reescribe primero, porque ahí releer el contexto sale barato.
 type Fresh = { handoff: Handoff | null; why?: string }
-async function freshHandoff($: any, current: Handoff | null, notice?: string): Promise<Fresh> {
+async function freshHandoff($: any, current: Handoff | null): Promise<Fresh> {
   const status = cacheStatus(await read($, lastEnd), await loadTtl($), await $.clock.now())
   const isBehind = !current || behindOf(await read($, turns), current.turns) > 0
   if (status.kind !== 'warm' || !isBehind) return { handoff: current }
 
-  if (notice) $.ui.toast(notice, { timeoutMs: 4000 })
   const r = await writeHandoff($)
 
   return r.ok ? { handoff: r.value } : { handoff: current, why: r.why }
@@ -910,27 +912,17 @@ export const register: Register = (on, options) => {
     return { text: r.ok ? `${CHECK} El handoff irá con tu próximo mensaje.` : r.text.replace('usa Compactar', 'usa /compact') }
   })
 
-  // /clear escrito a mano: después no hay session.start que busque el handoff, así que se busca
-  // aquí. Queda ofrecido como al abrir una sesión: viaja solo si se elige Continuar desde ahí. El
-  // /clear de Retomar limpio viene de la mod y lo adjunta sin preguntar.
+  // /clear escrito a mano: conversación nueva y limpia. No actualiza el handoff (esa consulta gasta
+  // tokens) ni lo ofrece después; el handoff guardado sigue disponible para la próxima sesión. Para
+  // empezar con handoff están Retomar limpio y /retomar, cuyo /clear viene de la mod y lo adjunta.
   on('command.run', { command: 'clear' }, async ($, e, next) => {
     if (e.origin?.kind === 'plugin') return next(e)
 
-    await sync($)
-    const current = fresh(await read($, handoff), await $.clock.now())
-    let use = current
-    if ((await read($, tokens)) > cfg.minTokens) {
-      const f = await freshHandoff($, current, 'Actualizando el handoff antes de limpiar…')
-      if (f.why) $.ui.toast(`No se actualizó el handoff: ${f.why}.`, { timeoutMs: 6000 })
-      use = f.handoff
-    }
-    const result = await next(e)
-    if (use) {
-      await update($, pending, () => use)
-      await update($, isAttaching, () => false)
-    }
+    isPlainClear = true
+    await update($, pending, () => null)
+    await update($, isAttaching, () => false)
 
-    return result
+    return next(e)
   })
 
   on('command.run', { command: 'effort' }, async ($, e, next) => {

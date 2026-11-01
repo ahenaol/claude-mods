@@ -2,6 +2,12 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.11.0] - 31/10/2026
+
+### Cambiado
+
+- Un `/clear` escrito a mano ya no actualiza el handoff antes de limpiar (esa consulta aparte gastaba tokens) ni lo deja ofrecido en la conversación nueva: arranca limpia, y si había un handoff ofrecido, también se retira. El handoff guardado no se gasta y se ofrece de nuevo la próxima vez que abras Claude en la carpeta. Para empezar con handoff están **Retomar limpio** y `/retomar`, que no cambian.
+
 ## [3.10.1] - 23/10/2026
 
 ### Corregido

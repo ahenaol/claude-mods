@@ -43,78 +43,45 @@ test('el handoff con un turno de atraso muestra +1 y ofrece actualizarse', async
   await ui.unmount()
 })
 
-// Un /clear escrito a mano no pierde el handoff: lo actualiza y lo deja ofrecido.
-test('un /clear escrito a mano actualiza el handoff y lo deja ofrecido', async ($, on) => {
+// Un /clear escrito a mano arranca limpio: no reescribe el handoff (gasta tokens) ni lo ofrece.
+test('un /clear escrito a mano no actualiza el handoff ni lo ofrece', async ($, on) => {
   let engine: any
   const { f } = fakeSession(on)
   engineClear(on, () => engine, f)
+  const sent = captureSubmit(on)
   engine = $
   await start($)
   await turn($, f, 300_000)
   await command($, 'handoff')
   await turn($, f, 310_000)
   await command($, 'clear')
-  // Se reescribió antes de limpiar: el ofrecido incluye el último turno.
-  expect(f.forks).toBe(2)
-  const ui = await mountBand($)
-  expect(await ui.find({ key: 'resume' })).toBeDefined()
-  expect(await ui.find({ key: 'drop' })).toBeDefined()
-  await ui.unmount()
-})
-
-// Tras /clear, con Continuar desde ahí el primer mensaje lleva el handoff y lo gasta.
-test('tras /clear y Continuar, el primer mensaje lleva el handoff y lo gasta', async ($, on) => {
-  let engine: any
-  const { f } = fakeSession(on)
-  engineClear(on, () => engine, f)
-  const sent = captureSubmit(on)
-  engine = $
-  await start($)
-  await turn($, f, 300_000)
-  await command($, 'clear')
-  const ui = await mountBand($)
-  await ui.press({ key: 'resume' })
-  await ui.unmount()
-  await $.prompt.submit({ text: 'sigamos', origin: { kind: 'composer' } } as never)
-  expect(sent[0].context.join('\n')).toContain('Probar el handoff.')
-  expect(((f.store.get(folderKey)) as any).isConsumed).toBe(true)
-})
-
-// Ofrecido y no elegido, no entra contexto que no se pidió, y no se vuelve a ofrecer.
-test('tras /clear, escribir sin elegir no adjunta el handoff y lo da por visto', async ($, on) => {
-  let engine: any
-  const { f } = fakeSession(on)
-  engineClear(on, () => engine, f)
-  const sent = captureSubmit(on)
-  engine = $
-  await start($)
-  await turn($, f, 300_000)
-  await command($, 'clear')
-  await $.prompt.submit({ text: 'otra tarea', origin: { kind: 'composer' } } as never)
-  expect(sent[0].context ?? []).toHaveLength(0)
-  expect(((f.store.get(folderKey)) as any).isConsumed).toBe(true)
+  expect(f.forks).toBe(1)
   const ui = await mountBand($)
   expect(await ui.find({ key: 'resume' })).toBeUndefined()
+  expect(await ui.find({ key: 'drop' })).toBeUndefined()
   await ui.unmount()
+  await $.prompt.submit({ text: 'otra tarea', origin: { kind: 'composer' } } as never)
+  expect(sent[0].context ?? []).toHaveLength(0)
+  // El handoff guardado no se gasta: sigue para la próxima sesión.
+  expect(((f.store.get(folderKey)) as any).isConsumed).toBe(false)
 })
 
-// Un comando o una ruta: el comando no gasta el handoff elegido, la ruta es un mensaje y lo lleva.
-test('un comando no gasta el handoff elegido; un mensaje que empieza por una ruta sí lo lleva', async ($, on) => {
+// Un ofrecimiento que estaba en pie (sesión recién abierta) también se retira con /clear.
+test('un /clear escrito a mano retira el handoff que estaba ofrecido', async ($, on) => {
   let engine: any
-  const { f } = fakeSession(on)
+  const { f } = fakeSession(on, {
+    [folderKey]: { text: 'anterior', at: NOW - HOUR, turns: 4, cwd: CWD, sessionId: 'otra', isConsumed: false },
+  })
   engineClear(on, () => engine, f)
-  const sent = captureSubmit(on)
   engine = $
   await start($)
-  await turn($, f, 300_000)
-  await command($, 'clear')
-  const ui = await mountBand($)
-  await ui.press({ key: 'resume' })
+  let ui = await mountBand($)
+  expect(await ui.find({ key: 'resume' })).toBeDefined()
   await ui.unmount()
-  await $.prompt.submit({ text: '/model', origin: { kind: 'composer' } } as never)
-  expect(sent[0].context ?? []).toHaveLength(0)
-  await $.prompt.submit({ text: '/Users/yo/notas.md revisa esto', origin: { kind: 'composer' } } as never)
-  expect(sent[1].context.join('\n')).toContain('Probar el handoff.')
+  await command($, 'clear')
+  ui = await mountBand($)
+  expect(await ui.find({ key: 'resume' })).toBeUndefined()
+  await ui.unmount()
 })
 
 // Retomar limpio adjunta el handoff sin preguntar: ya se eligió al pulsarlo.
