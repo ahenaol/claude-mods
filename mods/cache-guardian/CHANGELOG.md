@@ -2,6 +2,12 @@
 
 Todos los cambios relevantes de `cache-guardian`. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [3.12.0] - 13/11/2026
+
+### Corregido
+
+- Con `ttl` en `auto`, una sola pausa seguida de una reescritura completa dejaba el TTL en 5 min para siempre, aunque la cuenta tuviera caché de 1 h. Esa reescritura también ocurre con la caché viva cuando cambia el inicio de la conversación (un MCP que conecta, otras herramientas, un `CLAUDE.md` editado, otro modelo), y la franja contaba 5 min desde la primera respuesta de cada sesión. Ahora una medición de 1 h basta, porque solo es posible con la caché viva, y 5 min pide dos mediciones seguidas. Lo aprendido con la regla anterior (`cg.ttl`) se descarta y el mod vuelve a asumir 1 h hasta medir de nuevo.
+
 ## [3.11.0] - 31/10/2026
 
 ### Cambiado

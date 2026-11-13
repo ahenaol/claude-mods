@@ -37,6 +37,32 @@ export const learnTtl = (
   return null
 }
 
+// Las mediciones no pesan igual. Una reescritura chica tras 6 min o más prueba que la caché duró
+// al menos eso, así que una sola basta para '1h'. Una reescritura completa no prueba que venció:
+// si cambia el inicio de la conversación (un MCP que conecta, otras herramientas, un CLAUDE.md
+// editado, otro modelo), se reescribe todo aunque la caché siga viva. Por eso '5m' pide
+// TTL_STREAK mediciones seguidas, y mientras tanto queda lo que ya se sabía.
+export const TTL_STREAK = 2
+export const TTL_KEEP = 6
+
+export const settleTtl = (votes: readonly Ttl[]): Ttl | null => {
+  let settled: Ttl | null = null
+  let streak = 0
+  for (const v of votes) {
+    if (v === '1h') {
+      settled = '1h'
+      streak = 0
+    } else if (++streak >= TTL_STREAK) {
+      settled = '5m'
+    }
+  }
+
+  return settled
+}
+
+// Suma una medición y guarda solo las últimas TTL_KEEP.
+export const addTtlVote = (votes: readonly Ttl[], v: Ttl): Ttl[] => [...votes, v].slice(-TTL_KEEP)
+
 export type CacheStatus =
   | { kind: 'empty' }
   | { kind: 'warm'; leftMs: number }

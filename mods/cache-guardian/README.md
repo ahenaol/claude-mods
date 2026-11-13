@@ -183,7 +183,7 @@ Las opciones se cambian desde `/config` o en `~/.claude/settings.json`, bajo `pl
 
 | Opción | Por defecto | Qué controla |
 | --- | --- | --- |
-| `ttl` | `auto` | TTL de la caché. `auto` lo aprende de tus pausas (asume 1 h mientras tanto); `1h` o `5m` lo fijan. Con API key, probablemente sea `5m` |
+| `ttl` | `auto` | TTL de la caché. `auto` lo aprende de tus pausas (asume 1 h mientras tanto): una pausa con la caché viva basta para 1 h, y 5 min pide dos pausas seguidas con todo reescrito, porque un MCP que conecta o un `CLAUDE.md` editado también lo reescriben todo; `1h` o `5m` lo fijan. Con API key, probablemente sea `5m` |
 | `minTokens` | 40000 | Por debajo no hay alertas de caché, handoff automático, guardián ni botones |
 | `softTokens` | 100000 | Desde aquí la franja marca contexto pesado y sale el primer aviso |
 | `hardTokens` | 150000 | Segundo aviso de contexto |
@@ -205,7 +205,8 @@ El mod no hace llamadas de red propias ni envía datos a terceros. La cuota y el
 | No veo la franja | Aparece después de la primera respuesta. Revisa `claude plugin list` y busca en el chat una línea tenue `cache-guardian:` con el motivo |
 | No aparece la cuota | Sin suscripción, antes de la primera respuesta, o con `showQuota` en `false` |
 | La línea roja no dice el % | El mod sigue aprendiendo: `/guardian` dice cuántas muestras faltan. Con API key no hay dato de cuota |
-| Dice "tibia" pero la caché estaba fría | Tu TTL es de 5 minutos y el mod todavía no lo aprendió: fija `ttl` en `5m` |
+| Dice "tibia" pero la caché estaba fría | Tu TTL es de 5 minutos y el mod todavía no lo aprendió (pide dos pausas): fija `ttl` en `5m` |
+| Cuenta 5 min con una suscripción de 1 h | Venía de la 3.11 o anterior, que aprendía 5 min de una sola pausa. La 3.12 lo descarta; si sigue, fija `ttl` en `1h` |
 | La tecla `h` no hace nada | La franja no tiene el foco: haz clic en ella o usa `ctrl+x tab` primero |
 | **Retomar limpio** deja el mensaje en el prompt | El motor no permitió reenviarlo: pulsa Enter y el handoff sale con él |
 | El mod falla tras actualizar Claude Code | La API de mods está en *early access*: actualiza el mod o abre un issue |

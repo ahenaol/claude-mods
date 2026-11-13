@@ -17,6 +17,8 @@ import {
   showResumeWarm,
   idealPercent,
   learnTtl,
+  settleTtl,
+  addTtlVote,
   paceOf,
   quotaView,
   barRuns,
@@ -160,6 +162,19 @@ test('el TTL en auto se aprende de la pausa y de lo re-escrito', () => {
   // Pausa fuera de 6 a 55 min o contexto chico: no aprende.
   expect(learnTtl(2 * MIN, 50_000, 45_000, 50_000)).toBeNull()
   expect(learnTtl(20 * MIN, 10_000, 9_000, 10_000)).toBeNull()
+})
+
+test('una sola reescritura completa no basta para concluir 5m', () => {
+  expect(settleTtl([])).toBeNull()
+  // Un MCP que conecta reescribe todo aunque la caché siga viva: una medición no cambia nada.
+  expect(settleTtl(['5m'])).toBeNull()
+  expect(settleTtl(['1h', '5m'])).toBe('1h')
+  // Dos seguidas sí: la cuenta pasó a una API key o a un plan de 5 min.
+  expect(settleTtl(['1h', '5m', '5m'])).toBe('5m')
+  // Una reescritura chica tras la pausa prueba que la caché seguía viva y corta la racha.
+  expect(settleTtl(['5m', '1h', '5m'])).toBe('1h')
+  expect(settleTtl(['5m', '5m', '1h'])).toBe('1h')
+  expect(addTtlVote(['1h', '1h', '1h', '1h', '1h', '1h'], '5m')).toEqual(['1h', '1h', '1h', '1h', '1h', '5m'])
 })
 
 test('formatea tiempos y la ruta del handoff', () => {

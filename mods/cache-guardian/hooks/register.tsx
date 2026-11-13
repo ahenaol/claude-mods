@@ -28,6 +28,8 @@ import {
   showResumeWarm,
   isHighEffort,
   learnTtl,
+  settleTtl,
+  addTtlVote,
   ttlMs,
   padPercent,
   barRuns,
@@ -111,8 +113,14 @@ let quotaBase: QuotaMark | null = null
 // modelo y nada más cobró dentro del turno (compactación, búsqueda web del servidor).
 let turnCost: { usd: number | null; units: number; models: Set<string>; isDirty: boolean } | null = null
 
-const loadTtl = async ($: any): Promise<Ttl> =>
-  effectiveTtl(String(cfg.ttl), ((await $.store.get('cg.ttl')) as Ttl | null) ?? null)
+// Mediciones del TTL. Reemplaza a `cg.ttl` (3.11 y antes), que guardaba una sola medición y podía
+// quedar en '5m' por una reescritura que no venía del vencimiento.
+const TTL_KEY = 'cg.ttl.votes'
+const loadVotes = async ($: any): Promise<Ttl[]> => {
+  const v = await $.store.get(TTL_KEY)
+  return Array.isArray(v) ? v.filter((x): x is Ttl => x === '1h' || x === '5m') : []
+}
+const loadTtl = async ($: any): Promise<Ttl> => effectiveTtl(String(cfg.ttl), settleTtl(await loadVotes($)))
 
 // Claves de $.store. La de carpeta guarda el último handoff para ofrecerlo al abrir una conversación
 // nueva ahí; las de conversación guardan su propio handoff y cuándo respondió por última vez.
@@ -319,7 +327,7 @@ function queueSync($: any, tries = 0) {
 async function prune($: any) {
   const now = await $.clock.now()
   for (const k of (await $.store.keys()) as string[]) {
-    if (k.startsWith('cg.last./') || k.startsWith('handoff:')) {
+    if (k.startsWith('cg.last./') || k.startsWith('handoff:') || k === 'cg.ttl') {
       await $.store.delete(k)
     } else if (
       k.startsWith('cg.last.') ||
@@ -678,7 +686,7 @@ export const register: Register = (on, options) => {
       if (u && String(cfg.ttl) === 'auto') {
         const total = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
         const learned = learnTtl(probe.gapMs, probe.tokens, u.cache_creation_input_tokens, total)
-        if (learned) await $.store.set('cg.ttl', learned)
+        if (learned) await $.store.set(TTL_KEY, addTtlVote(await loadVotes($), learned))
       }
       probe = null
     }
